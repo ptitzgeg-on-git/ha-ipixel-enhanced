@@ -17,6 +17,7 @@ from .device.info import build_device_info_command, parse_device_response
 from .display.text_renderer import render_text_to_png
 from .display.emoji_renderer import render_emoji_to_png
 from .display.layout_renderer import render_layout_to_png
+from .display.widget_renderer import render_page_to_png
 from .exceptions import iPIXELError, iPIXELConnectionError, iPIXELTimeoutError
 
 _LOGGER = logging.getLogger(__name__)
@@ -210,6 +211,22 @@ class iPIXELAPI:
             return await self._send_image_commands(commands, f"layout_p{page}")
         except Exception as err:
             _LOGGER.exception("Error displaying layout page %d: %s", page, err)
+            return False
+
+    async def display_widgets(self, page: dict) -> bool:
+        """Render a widget page (the generic engine) and push it to the device."""
+        try:
+            device_info = await self.get_device_info()
+            png_data = await render_page_to_png(
+                self._hass, page, device_info["width"], device_info["height"]
+            )
+            commands = make_image_command(
+                image_bytes=png_data, file_extension=".png",
+                resize_method="crop", device_info_dict=device_info,
+            )
+            return await self._send_image_commands(commands, "page")
+        except Exception as err:  # noqa: BLE001
+            _LOGGER.exception("Error displaying widget page: %s", err)
             return False
 
     async def display_emoji(self, emoji: str, bg_color: str = "000000", width_override: int | None = None, height_override: int | None = None) -> bool:

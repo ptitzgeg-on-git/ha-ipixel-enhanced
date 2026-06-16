@@ -1,6 +1,6 @@
 {
   "domain": "ipixel_color",
-  "name": "iPIXEL Color",
+  "name": "iPIXEL Enhanced",
   "bluetooth": [
     {
       "local_name": "LED_BLE_*"
@@ -10,16 +10,19 @@
     }
   ],
   "codeowners": [
-    "@cagcoach"
+    "@ptitzgeg-on-git"
   ],
   "config_flow": true,
   "dependencies": [
-    "bluetooth"
+    "bluetooth",
+    "http",
+    "websocket_api",
+    "frontend"
   ],
-  "documentation": "https://github.com/cagcoach/ha-ipixel-color",
+  "documentation": "https://github.com/ptitzgeg-on-git/ha-ipixel-enhanced",
   "integration_type": "device",
   "iot_class": "local_push",
-  "issue_tracker": "https://github.com/cagcoach/ha-ipixel-color/issues",
+  "issue_tracker": "https://github.com/ptitzgeg-on-git/ha-ipixel-enhanced/issues",
   "loggers": [
     "custom_components.ipixel_color"
   ],
@@ -29,5 +32,5 @@
     "pillow>=10.0.0",
     "pypixelcolor>=0.4.0"
   ],
-  "version": "0.1.0"
+  "version": "0.2.0"
 }

@@ -52,3 +52,30 @@ display_text:
       default: [0, 0, 0]
       selector:
         color_rgb:
+
+show_page:
+  name: Show page
+  description: >-
+    Render a widget page and push it to the display. Provide either a saved
+    page "name" (created in the iPIXEL card) or an inline "page" definition.
+  target:
+    device:
+      integration: ipixel_color
+  fields:
+    name:
+      name: Saved page name
+      description: Name of a page saved from the iPIXEL card
+      required: false
+      example: weather
+      selector:
+        text:
+    page:
+      name: Inline page
+      description: >-
+        Page definition with a background and a list of widgets. See WIDGETS.md.
+      required: false
+      example: >-
+        {"background": "000000", "widgets": [{"type": "text", "text": "Hi",
+        "anchor": "center", "color": "ffaa00"}]}
+      selector:
+        object:

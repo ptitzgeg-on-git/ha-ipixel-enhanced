@@ -2,6 +2,7 @@
 from __future__ import annotations
 import asyncio
 import logging
+from pathlib import Path
 import voluptuous as vol
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
@@ -10,6 +11,13 @@ from homeassistant.exceptions import ConfigEntryNotReady, HomeAssistantError
 from homeassistant.helpers import device_registry as dr
 from .api import iPIXELAPI, iPIXELConnectionError, iPIXELTimeoutError
 from .const import DOMAIN, CONF_ADDRESS, CONF_NAME
+from .pages import PageStore, PlaylistRunner
+from . import web as ipixel_web
+
+STORE_DATA = f"{DOMAIN}_store"
+RUNNER_DATA = f"{DOMAIN}_runner"
+GLOBAL_DATA = f"{DOMAIN}_global_setup"
+CARD_URL = "/ipixel_color_static/ipixel-card.js"
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -19,6 +27,13 @@ PLATFORMS: list[Platform] = [
 ]
 
 SERVICE_RENDER_PREVIEW = "render_preview"
+
+SERVICE_SHOW_PAGE = "show_page"
+SHOW_PAGE_SCHEMA = vol.Schema({
+    vol.Optional("device_id"): vol.Any(None, str, [str]),
+    vol.Optional("name"): str,
+    vol.Optional("page"): dict,
+})
 
 SERVICE_SHOW_TEXT = "show_text"
 SHOW_TEXT_SCHEMA = vol.Schema({
@@ -155,6 +170,45 @@ async def _handle_show_layout(hass: HomeAssistant, call: ServiceCall) -> None:
     )
 
 
+async def _handle_show_page(hass: HomeAssistant, call: ServiceCall) -> None:
+    api = _resolve_api(hass, call)
+    page = call.data.get("page")
+    if page is None:
+        store: PageStore | None = hass.data.get(STORE_DATA)
+        name = call.data.get("name")
+        if not store or not name or name not in store.pages:
+            raise HomeAssistantError(f"Unknown page '{name}' — save it in the iPIXEL card first")
+        page = store.pages[name]
+    await api.display_widgets(page)
+
+
+async def _async_global_setup(hass: HomeAssistant) -> None:
+    """One-time setup shared by all config entries: store, runner, web, card."""
+    if hass.data.get(GLOBAL_DATA):
+        return
+    hass.data[GLOBAL_DATA] = True
+
+    store = PageStore(hass)
+    await store.async_load()
+    hass.data[STORE_DATA] = store
+    hass.data[RUNNER_DATA] = PlaylistRunner(hass, store)
+
+    ipixel_web.async_register(hass)
+
+    # Serve the Lovelace card and auto-load it (no manual resource needed).
+    try:
+        from homeassistant.components.http import StaticPathConfig
+        from homeassistant.components.frontend import add_extra_js_url
+
+        card_path = Path(__file__).parent / "www" / "ipixel-card.js"
+        await hass.http.async_register_static_paths(
+            [StaticPathConfig(CARD_URL, str(card_path), True)]
+        )
+        add_extra_js_url(hass, CARD_URL)
+    except Exception as err:  # noqa: BLE001
+        _LOGGER.warning("Could not auto-register the iPIXEL card: %s", err)
+
+
 async def _handle_render_preview(hass: HomeAssistant, call: ServiceCall) -> None:
     """Render all pages with test data and save PNGs to /homeassistant/www/ipixel_preview/."""
     from pathlib import Path
@@ -221,6 +275,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     hass.data.setdefault(DOMAIN, {})
     hass.data[DOMAIN][entry.entry_id] = api
     entry.runtime_data = api
+    await _async_global_setup(hass)
     # Warm the font cache in an executor so the font select entity doesn't
     # scan the fonts directory (blocking glob/rglob) inside the event loop.
     from .fonts import get_available_fonts
@@ -242,6 +297,15 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         async def _render_preview_service(call: ServiceCall) -> None:
             await _handle_render_preview(hass, call)
         hass.services.async_register(DOMAIN, SERVICE_RENDER_PREVIEW, _render_preview_service, schema=vol.Schema({}))
+    if not hass.services.has_service(DOMAIN, SERVICE_SHOW_PAGE):
+        async def _show_page_service(call: ServiceCall) -> None:
+            await _handle_show_page(hass, call)
+        hass.services.async_register(DOMAIN, SERVICE_SHOW_PAGE, _show_page_service, schema=SHOW_PAGE_SCHEMA)
+
+    # Start the playlist loop now that an API is available.
+    runner: PlaylistRunner | None = hass.data.get(RUNNER_DATA)
+    if runner:
+        runner.restart()
     return True
 
 
@@ -253,6 +317,11 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             await api.disconnect()
         except Exception as err:
             _LOGGER.error("Error disconnecting: %s", err)
+        # No devices left -> stop the playlist loop.
+        remaining = [v for v in hass.data.get(DOMAIN, {}).values() if hasattr(v, "display_widgets")]
+        runner: PlaylistRunner | None = hass.data.get(RUNNER_DATA)
+        if runner and not remaining:
+            runner.stop()
     return unload_ok
 
 
