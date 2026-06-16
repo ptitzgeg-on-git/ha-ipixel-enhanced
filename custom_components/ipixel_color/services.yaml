@@ -178,3 +178,65 @@ delete_slot:
           min: 0
           max: 255
           mode: box
+set_rhythm_animation:
+  name: Rhythm animation
+  description: Play a self-contained rhythm/visualizer animation on the panel (no audio feed needed).
+  target:
+    device:
+      integration: ipixel_color
+  fields:
+    style:
+      name: Style
+      description: 0 or 1
+      required: false
+      default: 0
+      selector:
+        number: { min: 0, max: 1, mode: slider }
+    frame:
+      name: Frame / speed
+      description: 0-7
+      required: false
+      default: 0
+      selector:
+        number: { min: 0, max: 7, mode: slider }
+
+set_rhythm_levels:
+  name: Rhythm levels (audio bars)
+  description: >-
+    Draw audio-reactive bars from levels you supply (e.g. from an audio analysis
+    sensor). Send repeatedly to animate. 11 levels, each 0-15.
+  target:
+    device:
+      integration: ipixel_color
+  fields:
+    style:
+      name: Style
+      description: 0-4
+      required: false
+      default: 0
+      selector:
+        number: { min: 0, max: 4, mode: slider }
+    levels:
+      name: Levels
+      description: List of up to 11 integers 0-15
+      required: true
+      example: "[3, 7, 12, 9, 5, 2, 8, 14, 6, 4, 1]"
+      selector:
+        object:
+
+set_playlist:
+  name: Enable/disable playlist
+  description: Start or stop the auto-rotating page playlist (configured in the iPIXEL card).
+  fields:
+    enable:
+      name: Enable
+      required: true
+      selector:
+        boolean:
+    device_id:
+      name: Target device
+      description: Optional — which display the playlist should play on.
+      required: false
+      selector:
+        device:
+          integration: ipixel_color

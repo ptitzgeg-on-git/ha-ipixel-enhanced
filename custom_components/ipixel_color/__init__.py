@@ -67,6 +67,28 @@ DELETE_SLOT_SCHEMA = vol.Schema({
     vol.Required("slot"): vol.All(int, vol.Range(min=0, max=255)),
 })
 
+SERVICE_RHYTHM_ANIMATION = "set_rhythm_animation"
+RHYTHM_ANIMATION_SCHEMA = vol.Schema({
+    vol.Optional("device_id"): vol.Any(None, str, [str]),
+    vol.Optional("style", default=0): vol.All(int, vol.Range(min=0, max=1)),
+    vol.Optional("frame", default=0): vol.All(int, vol.Range(min=0, max=7)),
+})
+
+SERVICE_RHYTHM_LEVELS = "set_rhythm_levels"
+RHYTHM_LEVELS_SCHEMA = vol.Schema({
+    vol.Optional("device_id"): vol.Any(None, str, [str]),
+    vol.Optional("style", default=0): vol.All(int, vol.Range(min=0, max=4)),
+    vol.Required("levels"): vol.All(
+        [vol.All(int, vol.Range(min=0, max=15))], vol.Length(min=1, max=11)
+    ),
+})
+
+SERVICE_SET_PLAYLIST = "set_playlist"
+SET_PLAYLIST_SCHEMA = vol.Schema({
+    vol.Required("enable"): vol.Boolean(),
+    vol.Optional("device_id"): vol.Any(None, str, [str]),
+})
+
 SERVICE_SHOW_TEXT = "show_text"
 SHOW_TEXT_SCHEMA = vol.Schema({
     vol.Required("text"): str,
@@ -164,6 +186,33 @@ async def _handle_show_slot(hass: HomeAssistant, call: ServiceCall) -> None:
 
 async def _handle_delete_slot(hass: HomeAssistant, call: ServiceCall) -> None:
     await _resolve_api(hass, call).delete_slot(call.data["slot"])
+
+
+async def _handle_rhythm_animation(hass: HomeAssistant, call: ServiceCall) -> None:
+    await _resolve_api(hass, call).set_rhythm_animation(
+        call.data.get("style", 0), call.data.get("frame", 0)
+    )
+
+
+async def _handle_rhythm_levels(hass: HomeAssistant, call: ServiceCall) -> None:
+    await _resolve_api(hass, call).set_rhythm_levels(
+        call.data.get("style", 0), call.data["levels"]
+    )
+
+
+async def _handle_set_playlist(hass: HomeAssistant, call: ServiceCall) -> None:
+    store: PageStore | None = hass.data.get(STORE_DATA)
+    runner: PlaylistRunner | None = hass.data.get(RUNNER_DATA)
+    if not store:
+        raise HomeAssistantError("Page store not ready")
+    playlist = dict(store.playlist)
+    playlist["enabled"] = call.data["enable"]
+    raw = call.data.get("device_id")
+    if raw:
+        playlist["target"] = raw[0] if isinstance(raw, list) else raw
+    await store.set_playlist(playlist)
+    if runner:
+        runner.restart()
 
 
 async def _handle_show_image(hass: HomeAssistant, call: ServiceCall) -> None:
@@ -276,6 +325,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         (SERVICE_SHOW_IMAGE, _handle_show_image, SHOW_IMAGE_SCHEMA),
         (SERVICE_SHOW_SLOT, _handle_show_slot, SHOW_SLOT_SCHEMA),
         (SERVICE_DELETE_SLOT, _handle_delete_slot, DELETE_SLOT_SCHEMA),
+        (SERVICE_RHYTHM_ANIMATION, _handle_rhythm_animation, RHYTHM_ANIMATION_SCHEMA),
+        (SERVICE_RHYTHM_LEVELS, _handle_rhythm_levels, RHYTHM_LEVELS_SCHEMA),
+        (SERVICE_SET_PLAYLIST, _handle_set_playlist, SET_PLAYLIST_SCHEMA),
     ):
         if not hass.services.has_service(DOMAIN, _svc):
             def _make(handler):

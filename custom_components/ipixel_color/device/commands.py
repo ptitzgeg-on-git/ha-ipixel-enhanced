@@ -65,3 +65,16 @@ def make_show_slot_command(number: int) -> bytes:
 def make_delete_slot_command(number: int) -> bytes:
     from pypixelcolor.commands.delete import delete
     return delete(int(number)).windows[0].data
+
+
+def make_rhythm_animation_command(style: int, frame: int) -> bytes:
+    """Self-contained rhythm animation (no audio feed needed). style 0-1, frame 0-7."""
+    from pypixelcolor.commands.set_rhythm_mode import set_rhythm_mode_2
+    return set_rhythm_mode_2(int(style), int(frame)).windows[0].data
+
+
+def make_rhythm_levels_command(style: int, levels: list[int]) -> bytes:
+    """Audio-reactive bars from externally supplied levels. style 0-4, 11 levels 0-15."""
+    from pypixelcolor.commands.set_rhythm_mode import set_rhythm_mode
+    lv = (list(levels) + [0] * 11)[:11]
+    return set_rhythm_mode(int(style), *[int(x) for x in lv]).windows[0].data

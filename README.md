@@ -83,6 +83,12 @@ playlist target all let you address a specific panel.
 | `ipixel_color.set_orientation` | Rotate the display (0/90/180/270°). Also an **Orientation** select entity. |
 | `ipixel_color.set_fun_mode` | Toggle the panel's built-in effect mode. Also a **Fun Mode** switch. |
 | `ipixel_color.show_slot` / `delete_slot` | Recall / delete a program stored in device memory. |
+| `ipixel_color.set_playlist` | Start/stop the auto-rotating playlist from an automation. |
+| `ipixel_color.set_rhythm_animation` | Self-contained visualizer animation (no audio feed). |
+| `ipixel_color.set_rhythm_levels` | Audio bars from levels you supply (send repeatedly). |
+
+See **[AUTOMATIONS.md](AUTOMATIONS.md)** for ready-to-use automation examples
+(arrival page, day/night playlist, doorbell alert, GIFs, device slots…).
 
 ### Extra entities
 

@@ -281,15 +281,40 @@ class iPIXELAPI:
             return False
 
     async def set_fun_mode(self, enable: bool) -> bool:
-        """Toggle the panel's built-in 'fun' effect mode."""
+        """Toggle the panel's built-in 'fun' effect mode.
+
+        Byte sequence is identical to the official app (verified). If nothing
+        visible happens, this panel firmware likely ignores it or only animates
+        existing content — try enabling it, then sending a page/text.
+        """
         from .device.commands import make_fun_mode_command
         try:
-            ok = await self._bluetooth.send_command(make_fun_mode_command(enable))
+            cmd = make_fun_mode_command(enable)
+            _LOGGER.info("Fun mode %s -> sending %s", "ON" if enable else "OFF", cmd.hex())
+            ok = await self._bluetooth.send_command(cmd)
             if ok:
                 self._fun_mode = bool(enable)
             return ok
         except Exception as err:  # noqa: BLE001
             _LOGGER.error("Error setting fun mode: %s", err)
+            return False
+
+    async def set_rhythm_animation(self, style: int, frame: int) -> bool:
+        """Play a self-contained rhythm animation (no audio feed needed)."""
+        from .device.commands import make_rhythm_animation_command
+        try:
+            return await self._bluetooth.send_command(make_rhythm_animation_command(style, frame))
+        except Exception as err:  # noqa: BLE001
+            _LOGGER.error("Error setting rhythm animation: %s", err)
+            return False
+
+    async def set_rhythm_levels(self, style: int, levels: list[int]) -> bool:
+        """Drive the rhythm bars from externally supplied audio levels (11 x 0-15)."""
+        from .device.commands import make_rhythm_levels_command
+        try:
+            return await self._bluetooth.send_command(make_rhythm_levels_command(style, levels))
+        except Exception as err:  # noqa: BLE001
+            _LOGGER.error("Error setting rhythm levels: %s", err)
             return False
 
     async def show_slot(self, number: int) -> bool:
