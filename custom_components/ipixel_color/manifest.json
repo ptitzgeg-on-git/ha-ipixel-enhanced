@@ -17,7 +17,8 @@
     "bluetooth",
     "http",
     "websocket_api",
-    "frontend"
+    "frontend",
+    "panel_custom"
   ],
   "documentation": "https://github.com/ptitzgeg-on-git/ha-ipixel-enhanced",
   "integration_type": "device",

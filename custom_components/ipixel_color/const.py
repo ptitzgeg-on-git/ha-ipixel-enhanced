@@ -35,6 +35,9 @@ AVAILABLE_MODES = [
 ]
 
 DEFAULT_MODE = MODE_TEXT_IMAGE
-CONF_OVERRIDE_DIMENSIONS = "override_dimensions"
-CONF_PANEL_WIDTH = "panel_width"
-CONF_PANEL_HEIGHT = "panel_height"
+
+# Options flow: some panels (e.g. the 32x32 B.K. Light sold at Action) report
+# wrong dimensions over BLE, so let the user override them.
+OPT_OVERRIDE_DIMENSIONS = "override_dimensions"
+OPT_PANEL_WIDTH = "panel_width"
+OPT_PANEL_HEIGHT = "panel_height"

@@ -11,9 +11,14 @@ from homeassistant.core import HomeAssistant
 from homeassistant.data_entry_flow import FlowResult
 from homeassistant.exceptions import HomeAssistantError
 
+from homeassistant.core import callback
+
 from .api import iPIXELAPI, iPIXELConnectionError, iPIXELTimeoutError
 from .bluetooth.scanner import discover_ipixel_devices_ha
-from .const import DOMAIN, CONF_ADDRESS
+from .const import (
+    DOMAIN, CONF_ADDRESS,
+    OPT_OVERRIDE_DIMENSIONS, OPT_PANEL_WIDTH, OPT_PANEL_HEIGHT,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -64,6 +69,11 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     def __init__(self):
         """Initialize config flow."""
         self._discovered_devices: dict[str, dict[str, Any]] = {}
+
+    @staticmethod
+    @callback
+    def async_get_options_flow(config_entry):
+        return OptionsFlowHandler(config_entry)
 
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
@@ -274,4 +284,36 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         return self.async_show_form(
             step_id="bluetooth_confirm",
             description_placeholders=placeholders,
+        )
+
+
+class OptionsFlowHandler(config_entries.OptionsFlow):
+    """Let the user override the panel dimensions reported over BLE."""
+
+    def __init__(self, config_entry) -> None:
+        self._entry = config_entry
+
+    async def async_step_init(self, user_input: dict[str, Any] | None = None) -> FlowResult:
+        if user_input is not None:
+            return self.async_create_entry(title="", data=user_input)
+
+        opts = self._entry.options or {}
+        schema = vol.Schema({
+            vol.Optional(
+                OPT_OVERRIDE_DIMENSIONS,
+                default=opts.get(OPT_OVERRIDE_DIMENSIONS, False),
+            ): bool,
+            vol.Optional(
+                OPT_PANEL_WIDTH,
+                default=opts.get(OPT_PANEL_WIDTH, 32),
+            ): vol.All(int, vol.Range(min=0, max=512)),
+            vol.Optional(
+                OPT_PANEL_HEIGHT,
+                default=opts.get(OPT_PANEL_HEIGHT, 32),
+            ): vol.All(int, vol.Range(min=0, max=512)),
+        })
+        return self.async_show_form(
+            step_id="init",
+            data_schema=schema,
+            description_placeholders={"note": "0 = use firmware-reported value"},
         )

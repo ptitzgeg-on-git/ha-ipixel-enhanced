@@ -9,7 +9,7 @@ const ANCHORS = [
   "center_left", "center", "center_right",
   "bottom_left", "bottom_center", "bottom_right",
 ];
-const FONTS = ["5x5", "7x5", "3x5-de", "WP7xn", "OpenSans-Light", "NotoColorEmoji"];
+const FONTS = ["5x5", "7x5", "3x5-de", "WP7xn", "OpenSans-Light"];
 
 // Which editable fields each widget type exposes, beyond the common ones.
 const WIDGET_FIELDS = {

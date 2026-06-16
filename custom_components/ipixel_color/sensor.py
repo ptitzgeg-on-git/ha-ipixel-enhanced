@@ -46,12 +46,6 @@ SENSOR_DESCRIPTIONS = [
         icon="mdi:memory",
         entity_category=EntityCategory.DIAGNOSTIC,
     ),
-    SensorEntityDescription(
-        key="wifi_version",
-        name="WiFi Version", 
-        icon="mdi:wifi",
-        entity_category=EntityCategory.DIAGNOSTIC,
-    ),
 ]
 
 

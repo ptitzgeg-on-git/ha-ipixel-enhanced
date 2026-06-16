@@ -1,6 +1,5 @@
 """The iPIXEL Color integration."""
 from __future__ import annotations
-import asyncio
 import logging
 from pathlib import Path
 import voluptuous as vol
@@ -17,7 +16,10 @@ from . import web as ipixel_web
 STORE_DATA = f"{DOMAIN}_store"
 RUNNER_DATA = f"{DOMAIN}_runner"
 GLOBAL_DATA = f"{DOMAIN}_global_setup"
-CARD_URL = "/ipixel_color_static/ipixel-card.js"
+PANEL_DATA = f"{DOMAIN}_panel"
+STATIC_URL = "/ipixel_color_static"
+CARD_URL = f"{STATIC_URL}/ipixel-card.js"
+PANEL_URL = f"{STATIC_URL}/ipixel-panel.js"
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -25,8 +27,6 @@ PLATFORMS: list[Platform] = [
     Platform.SWITCH, Platform.TEXT, Platform.SENSOR,
     Platform.SELECT, Platform.NUMBER, Platform.BUTTON, Platform.LIGHT
 ]
-
-SERVICE_RENDER_PREVIEW = "render_preview"
 
 SERVICE_SHOW_PAGE = "show_page"
 SHOW_PAGE_SCHEMA = vol.Schema({
@@ -53,28 +53,6 @@ SHOW_EMOJI_SCHEMA = vol.Schema({
     vol.Optional("bg_color"): vol.All([vol.All(int, vol.Range(min=0, max=255))], vol.Length(min=3, max=3)),
     vol.Optional("width"): vol.All(int, vol.Range(min=1, max=512)),
     vol.Optional("height"): vol.All(int, vol.Range(min=1, max=512)),
-})
-
-SERVICE_SHOW_LAYOUT = "show_layout"
-SHOW_LAYOUT_SCHEMA = vol.Schema({
-    vol.Optional("time_str", default=""): str,
-    vol.Optional("temp_str", default=""): str,
-    vol.Optional("rain_str", default=""): str,
-    vol.Optional("travel_str", default=""): str,
-    vol.Optional("emoji_codepoint", default=""): str,
-    vol.Optional("bg_color", default="000000"): str,
-    vol.Optional("text_color", default="ffffff"): str,
-    vol.Optional("accent_color", default="00bfff"): str,
-    vol.Optional("page", default=1): vol.All(int, vol.Range(min=1, max=3)),
-    vol.Optional("metro_ok", default=True): vol.Boolean(),
-    vol.Optional("metro_a_ok", default=True): vol.Boolean(),
-    vol.Optional("metro_b_ok", default=True): vol.Boolean(),
-    vol.Optional("advice_str", default=""): str,
-    vol.Optional("condition_str", default=""): str,
-    vol.Optional("morning_str", default=""): str,
-    vol.Optional("evening_str", default=""): str,
-    vol.Optional("emoji_codepoint_morning", default=""): str,
-    vol.Optional("emoji_codepoint_evening", default=""): str,
 })
 
 
@@ -128,48 +106,6 @@ async def _handle_show_emoji(hass: HomeAssistant, call: ServiceCall) -> None:
     )
 
 
-async def _handle_show_layout(hass: HomeAssistant, call: ServiceCall) -> None:
-    import asyncio
-    from .display.emoji_renderer import fetch_emoji_png
-    api = _resolve_api(hass, call)
-    page = call.data.get("page", 1)
-
-    async def _fetch(cp: str):
-        return await fetch_emoji_png(hass, cp) if cp.strip() else None
-
-    # Ⓜ️ (24c2) fetché automatiquement pour page 3 — mis en cache après 1er appel
-    metro_cp = "24c2" if page == 3 else ""
-
-    emoji_png, morning_emoji_png, evening_emoji_png, metro_emoji_png = await asyncio.gather(
-        _fetch(call.data.get("emoji_codepoint", "")),
-        _fetch(call.data.get("emoji_codepoint_morning", "")),
-        _fetch(call.data.get("emoji_codepoint_evening", "")),
-        _fetch(metro_cp),
-    )
-
-    await api.display_layout(
-        time_str=call.data.get("time_str", ""),
-        temp_str=call.data.get("temp_str", ""),
-        rain_str=call.data.get("rain_str", ""),
-        travel_str=call.data.get("travel_str", ""),
-        emoji_png=emoji_png,
-        bg_color=call.data.get("bg_color", "000000"),
-        text_color=call.data.get("text_color", "ffffff"),
-        accent_color=call.data.get("accent_color", "00bfff"),
-        page=page,
-        metro_ok=call.data.get("metro_ok", True),
-        metro_a_ok=call.data.get("metro_a_ok", True),
-        metro_b_ok=call.data.get("metro_b_ok", True),
-        metro_emoji_png=metro_emoji_png,
-        advice_str=call.data.get("advice_str", ""),
-        condition_str=call.data.get("condition_str", ""),
-        morning_str=call.data.get("morning_str", ""),
-        evening_str=call.data.get("evening_str", ""),
-        morning_emoji_png=morning_emoji_png,
-        evening_emoji_png=evening_emoji_png,
-    )
-
-
 async def _handle_show_page(hass: HomeAssistant, call: ServiceCall) -> None:
     api = _resolve_api(hass, call)
     page = call.data.get("page")
@@ -195,67 +131,33 @@ async def _async_global_setup(hass: HomeAssistant) -> None:
 
     ipixel_web.async_register(hass)
 
-    # Serve the Lovelace card and auto-load it (no manual resource needed).
+    # Serve the whole www/ dir, auto-load the card, and register a sidebar panel
+    # so the designer is discoverable without manually adding a Lovelace card.
     try:
         from homeassistant.components.http import StaticPathConfig
         from homeassistant.components.frontend import add_extra_js_url
+        from homeassistant.components import panel_custom
 
-        card_path = Path(__file__).parent / "www" / "ipixel-card.js"
+        www_dir = Path(__file__).parent / "www"
         await hass.http.async_register_static_paths(
-            [StaticPathConfig(CARD_URL, str(card_path), True)]
+            [StaticPathConfig(STATIC_URL, str(www_dir), True)]
         )
         add_extra_js_url(hass, CARD_URL)
+
+        if not hass.data.get(PANEL_DATA):
+            await panel_custom.async_register_panel(
+                hass,
+                webcomponent_name="ipixel-panel",
+                frontend_url_path="ipixel",
+                module_url=PANEL_URL,
+                sidebar_title="iPIXEL",
+                sidebar_icon="mdi:dots-grid",
+                require_admin=False,
+                embed_iframe=False,
+            )
+            hass.data[PANEL_DATA] = True
     except Exception as err:  # noqa: BLE001
-        _LOGGER.warning("Could not auto-register the iPIXEL card: %s", err)
-
-
-async def _handle_render_preview(hass: HomeAssistant, call: ServiceCall) -> None:
-    """Render all pages with test data and save PNGs to /homeassistant/www/ipixel_preview/."""
-    from pathlib import Path
-    from .display.emoji_renderer import fetch_emoji_png
-    from .display.layout_renderer import render_layout_to_png
-
-    out_dir = Path("/homeassistant/www/ipixel_preview")
-    out_dir.mkdir(parents=True, exist_ok=True)
-
-    sunny_png, rainy_png, cloudy_png, bike_png, metro_png = await asyncio.gather(
-        fetch_emoji_png(hass, "1f31e"),  # ☀
-        fetch_emoji_png(hass, "1f327"),  # 🌧
-        fetch_emoji_png(hass, "26c5"),   # ⛅
-        fetch_emoji_png(hass, "1f6b4"),  # 🚴
-        fetch_emoji_png(hass, "24c2"),   # Ⓜ
-    )
-
-    scenarios = [
-        ("page1_sunny",  {"page": 1, "time_str": "14:35", "temp_str": "22C", "rain_str": "5%",  "emoji_png": sunny_png}),
-        ("page1_rain",   {"page": 1, "time_str": "08:10", "temp_str": "14C", "rain_str": "70%", "emoji_png": rainy_png}),
-        ("page2_sun17",  {"page": 2, "evening_str": "SUN 9C 5%",   "evening_emoji_png": sunny_png}),
-        ("page2_rain17", {"page": 2, "evening_str": "PLU 16C 75%", "evening_emoji_png": rainy_png}),
-        ("page3_all_ok", {"page": 3, "metro_a_ok": True,  "metro_b_ok": True,  "travel_str": "8min",  "emoji_png": bike_png, "metro_emoji_png": metro_png}),
-        ("page3_a_ko",   {"page": 3, "metro_a_ok": False, "metro_b_ok": True,  "travel_str": "14min", "emoji_png": bike_png, "metro_emoji_png": metro_png}),
-        ("page3_b_ko",   {"page": 3, "metro_a_ok": True,  "metro_b_ok": False, "travel_str": "22min", "emoji_png": bike_png, "metro_emoji_png": metro_png}),
-        ("page3_all_ko", {"page": 3, "metro_a_ok": False, "metro_b_ok": False, "travel_str": "22min", "emoji_png": bike_png, "metro_emoji_png": metro_png}),
-    ]
-
-    for name, kwargs in scenarios:
-        try:
-            from PIL import Image
-            import io as _io
-            png = await render_layout_to_png(hass, **kwargs)
-            # Upscale 4× so it's visible in a browser (32→128px)
-            img = Image.open(_io.BytesIO(png)).convert("RGB")
-            img = img.resize((img.width * 4, img.height * 4), Image.NEAREST)
-            buf = _io.BytesIO()
-            img.save(buf, format="PNG")
-            (out_dir / f"{name}.png").write_bytes(buf.getvalue())
-            _LOGGER.info("Preview saved: /local/ipixel_preview/%s.png", name)
-        except Exception as err:
-            _LOGGER.error("Preview %s failed: %s", name, err)
-
-    _LOGGER.info(
-        "All previews available at http://your-ha:8123/local/ipixel_preview/ — "
-        "page1_sunny, page1_rain, page2_sun17, page2_rain17, page3_ok, page3_ko"
-    )
+        _LOGGER.warning("Could not auto-register the iPIXEL UI: %s", err)
 
 
 async def async_setup(hass: HomeAssistant, config: dict) -> bool:
@@ -269,7 +171,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     address = entry.data[CONF_ADDRESS]
     name = entry.data[CONF_NAME]
     _LOGGER.debug("Setting up iPIXEL Color for %s (%s)", name, address)
-    api = iPIXELAPI(hass, address)
+    api = iPIXELAPI(hass, address, entry)
     try:
         if not await api.connect():
             raise ConfigEntryNotReady(f"Failed to connect to iPIXEL device at {address}")
@@ -296,18 +198,13 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         async def _show_emoji_service(call: ServiceCall) -> None:
             await _handle_show_emoji(hass, call)
         hass.services.async_register(DOMAIN, SERVICE_SHOW_EMOJI, _show_emoji_service, schema=SHOW_EMOJI_SCHEMA)
-    if not hass.services.has_service(DOMAIN, SERVICE_SHOW_LAYOUT):
-        async def _show_layout_service(call: ServiceCall) -> None:
-            await _handle_show_layout(hass, call)
-        hass.services.async_register(DOMAIN, SERVICE_SHOW_LAYOUT, _show_layout_service, schema=SHOW_LAYOUT_SCHEMA)
-    if not hass.services.has_service(DOMAIN, SERVICE_RENDER_PREVIEW):
-        async def _render_preview_service(call: ServiceCall) -> None:
-            await _handle_render_preview(hass, call)
-        hass.services.async_register(DOMAIN, SERVICE_RENDER_PREVIEW, _render_preview_service, schema=vol.Schema({}))
     if not hass.services.has_service(DOMAIN, SERVICE_SHOW_PAGE):
         async def _show_page_service(call: ServiceCall) -> None:
             await _handle_show_page(hass, call)
         hass.services.async_register(DOMAIN, SERVICE_SHOW_PAGE, _show_page_service, schema=SHOW_PAGE_SCHEMA)
+
+    # Reload the entry when its options (e.g. panel dimensions) change.
+    entry.async_on_unload(entry.add_update_listener(async_reload_entry))
 
     # Start the playlist loop now that an API is available.
     runner: PlaylistRunner | None = hass.data.get(RUNNER_DATA)

@@ -41,20 +41,34 @@ The designer card is registered automatically — no manual resource needed.
 
 ## Using the page designer
 
-Add the card to any dashboard:
-
-```yaml
-type: custom:ipixel-card
-```
+After install, an **iPIXEL** entry appears in the Home Assistant **sidebar** —
+open it to get the full-page designer. (You can also add it to any dashboard
+with `type: custom:ipixel-card`.)
 
 Then:
 
-1. **Add widget** → choose a type, set its content, position and colour.
-2. Watch the **live preview** update.
-3. **Send now** to push it to the display, or **Save** it to your library.
-4. (Optional) Build a **playlist** and enable it to auto-rotate pages.
+1. Pick your **device** (multiple iPIXEL displays are supported — each shows up
+   as its own device, and the designer/playlist let you target each one).
+2. **Add widget** → choose a type, set its content, position and colour.
+3. Watch the **live preview** update.
+4. **Send now** to push it to the display, or **Save** it to your library.
+5. (Optional) Build a **playlist** and enable it to auto-rotate pages on a
+   chosen device.
 
 See **[WIDGETS.md](WIDGETS.md)** for the full widget reference.
+
+## Wrong size / cropped display?
+
+Some panels — notably the **32×32 B.K. Light sold at Action** — report wrong
+dimensions over Bluetooth. Go to **Settings → Devices & Services → iPIXEL →
+Configure** and enable **Override panel dimensions**, then set the real width
+and height (e.g. 32 × 32).
+
+## Multiple displays
+
+Add each display as a separate integration entry (they're auto-discovered).
+The designer's device dropdown, the `show_page` service target, and the
+playlist target all let you address a specific panel.
 
 ---
 

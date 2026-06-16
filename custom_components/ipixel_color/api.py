@@ -16,8 +16,8 @@ from .device.image import make_image_command
 from .device.info import build_device_info_command, parse_device_response
 from .display.text_renderer import render_text_to_png
 from .display.emoji_renderer import render_emoji_to_png
-from .display.layout_renderer import render_layout_to_png
 from .display.widget_renderer import render_page_to_png
+from .const import OPT_OVERRIDE_DIMENSIONS, OPT_PANEL_WIDTH, OPT_PANEL_HEIGHT
 from .exceptions import iPIXELError, iPIXELConnectionError, iPIXELTimeoutError
 
 _LOGGER = logging.getLogger(__name__)
@@ -25,13 +25,30 @@ _LOGGER = logging.getLogger(__name__)
 
 class iPIXELAPI:
 
-    def __init__(self, hass: HomeAssistant, address: str) -> None:
+    def __init__(self, hass: HomeAssistant, address: str, entry=None) -> None:
         self._address = address
         self._hass = hass
+        self._entry = entry
         self._bluetooth = BluetoothClient(hass, address)
         self._power_state = False
         self._device_info: dict[str, Any] | None = None
         self._device_response: bytes | None = None
+
+    def _apply_dimension_override(self, info: dict[str, Any]) -> dict[str, Any]:
+        """Honor user dimension overrides (B.K. Light & co. report wrong sizes)."""
+        entry = self._entry
+        if entry is None:
+            return info
+        opts = entry.options or {}
+        if not opts.get(OPT_OVERRIDE_DIMENSIONS):
+            return info
+        w = int(opts.get(OPT_PANEL_WIDTH, 0) or 0)
+        h = int(opts.get(OPT_PANEL_HEIGHT, 0) or 0)
+        if w > 0:
+            info["width"] = w
+        if h > 0:
+            info["height"] = h
+        return info
 
     async def connect(self) -> bool:
         return await self._bluetooth.connect(self._notification_handler)
@@ -99,7 +116,7 @@ class iPIXELAPI:
         if self._device_info is not None:
             return self._device_info
         _LOGGER.debug("Using default device info (notify already acquired by connect)")
-        self._device_info = {
+        self._device_info = self._apply_dimension_override({
             "width": 32,
             "height": 32,
             "device_type": 0,
@@ -109,7 +126,7 @@ class iPIXELAPI:
             "wifi_version": "Unknown",
             "has_wifi": False,
             "password_flag": 255
-        }
+        })
         return self._device_info
 
     async def display_text(self, text: str, antialias: bool = True, font_size: float | None = None, font: str | None = None, line_spacing: int = 0, text_color: str = "ffffff", bg_color: str = "000000") -> bool:
@@ -170,48 +187,6 @@ class iPIXELAPI:
 
         _LOGGER.info("Image [%s] displayed — %d bytes OK", label, total_bytes)
         return True
-
-    async def display_layout(
-        self,
-        time_str: str = "",
-        temp_str: str = "",
-        rain_str: str = "",
-        travel_str: str = "",
-        emoji_png: bytes | None = None,
-        bg_color: str = "000000",
-        text_color: str = "ffffff",
-        accent_color: str = "00bfff",
-        page: int = 1,
-        metro_ok: bool = True,
-        metro_a_ok: bool = True,
-        metro_b_ok: bool = True,
-        metro_emoji_png: bytes | None = None,
-        advice_str: str = "",
-        condition_str: str = "",
-        morning_str: str = "",
-        evening_str: str = "",
-        morning_emoji_png: bytes | None = None,
-        evening_emoji_png: bytes | None = None,
-    ) -> bool:
-        """Display a full layout page using PIL rendering."""
-        try:
-            device_info = await self.get_device_info()
-            _LOGGER.info("Rendering layout page %d", page)
-            png_data = await render_layout_to_png(
-                self._hass, time_str, temp_str, rain_str, travel_str,
-                emoji_png, bg_color, text_color, accent_color, page,
-                metro_ok, metro_a_ok, metro_b_ok, metro_emoji_png, advice_str,
-                condition_str=condition_str,
-                morning_str=morning_str,
-                evening_str=evening_str,
-                morning_emoji_png=morning_emoji_png,
-                evening_emoji_png=evening_emoji_png,
-            )
-            commands = make_image_command(image_bytes=png_data, file_extension=".png", resize_method="crop", device_info_dict=device_info)
-            return await self._send_image_commands(commands, f"layout_p{page}")
-        except Exception as err:
-            _LOGGER.exception("Error displaying layout page %d: %s", page, err)
-            return False
 
     async def display_widgets(self, page: dict) -> bool:
         """Render a widget page (the generic engine) and push it to the device."""

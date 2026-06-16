@@ -38,6 +38,19 @@
       "unknown": "Unknown error occurred."
     }
   },
+  "options": {
+    "step": {
+      "init": {
+        "title": "iPIXEL panel settings",
+        "description": "Some panels (e.g. the 32x32 B.K. Light sold at Action) report wrong dimensions over Bluetooth. Override them here if your display looks cropped or stretched. {note}",
+        "data": {
+          "override_dimensions": "Override panel dimensions",
+          "panel_width": "Panel width (px)",
+          "panel_height": "Panel height (px)"
+        }
+      }
+    }
+  },
   "entity": {
     "switch": {
       "power": {
