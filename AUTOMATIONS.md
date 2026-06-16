@@ -9,13 +9,20 @@ Everything the card does is also available to automations/scripts through
 |---|---|
 | Show a saved page | `ipixel_color.show_page` with `name:` |
 | Show an inline page | `ipixel_color.show_page` with `page:` |
-| Refresh a live page (clock/sensors) | call `show_page` on a `time_pattern` trigger, or use the playlist |
+| Show scrolling text | `ipixel_color.show_text` with `text:` (templates supported) |
+| Show an emoji | `ipixel_color.show_emoji` with `emoji:` |
+| Show the native clock | `ipixel_color.show_clock` (style / 24h / date) |
+| Refresh a live page (sensors) | call `show_page` on a `time_pattern` trigger, or use the playlist |
 | Start / stop the auto-rotating playlist | `ipixel_color.set_playlist` `enable: true/false` |
 | Show an image or animated GIF | `ipixel_color.show_image` `source:` |
 | Recall something stored on the device | `ipixel_color.show_slot` `slot:` |
 | Rotate the screen | `ipixel_color.set_orientation` or the **Orientation** select |
 | Brightness / power | the `number`/`switch` entities (e.g. `number.<device>_brightness`) |
 | Audio bars | `ipixel_color.set_rhythm_levels` (send repeatedly) |
+
+> **Showing the clock from an automation:** call **`ipixel_color.show_clock`**.
+> Changing the *Clock 24h* / *Clock Style* entities alone does **not** refresh
+> the panel — those are just settings read the next time the clock is shown.
 
 A page is saved in the card's **library** and persists across restarts. The
 **playlist** is stored too and keeps running on its own; `set_playlist` just
@@ -39,7 +46,43 @@ automation:
           name: welcome        # a page you saved in the card
 ```
 
-### Keep a live page fresh (clock + sensors) every minute
+### Show the clock (native, ticks on the device)
+```yaml
+automation:
+  - alias: Clock in the evening
+    trigger: { platform: time, at: "20:00:00" }
+    action:
+      - service: ipixel_color.show_clock
+        target:
+          device_id: <your_device>
+        data:
+          style: 1          # face style 0-8
+          format_24: true   # 24-hour time
+          show_date: true
+```
+Once shown, the clock keeps ticking on the panel with no Bluetooth traffic.
+The optional **Clock Style / Clock 24h / Clock Show Date** entities just set the
+defaults used by this service and by the card's clock controls.
+
+### Scrolling text alert
+```yaml
+automation:
+  - alias: Washing machine done
+    trigger:
+      - platform: state
+        entity_id: binary_sensor.washing_machine_done
+        to: "on"
+    action:
+      - service: ipixel_color.show_text
+        target: { device_id: <your_device> }
+        data:
+          text: "Laundry ready 🧺"
+          color: "00ccaa"
+          animation: 1       # scroll left
+          speed: 60
+```
+
+### Keep a live page fresh (sensors) every minute
 A rendered page is a snapshot, so re-send it to update it:
 ```yaml
 automation:

@@ -414,6 +414,11 @@ class iPIXELAPI:
         return self._bluetooth.is_connected
 
     @property
+    def cached_info(self) -> dict[str, Any]:
+        """Device info already fetched during setup (empty until then)."""
+        return self._device_info or {}
+
+    @property
     def power_state(self) -> bool:
         return self._power_state
 

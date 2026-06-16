@@ -8,13 +8,13 @@ from homeassistant.components.switch import SwitchEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
-from homeassistant.helpers.entity import DeviceInfo
+from homeassistant.helpers.entity import EntityCategory
 from homeassistant.helpers.restore_state import RestoreEntity
 
 from .api import iPIXELAPI, iPIXELConnectionError
 from .const import DOMAIN, CONF_ADDRESS, CONF_NAME
 from .common import get_entity_id_by_unique_id
-from .common import update_ipixel_display
+from .common import update_ipixel_display, build_device_info
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -41,7 +41,9 @@ async def async_setup_entry(
 
 
 class iPIXELSwitch(SwitchEntity):
-    """Representation of an iPIXEL Color switch."""
+    """Representation of an iPIXEL Color switch (panel power)."""
+
+    _attr_has_entity_name = True
 
     def __init__(
         self, 
@@ -55,19 +57,12 @@ class iPIXELSwitch(SwitchEntity):
         self._entry = entry
         self._address = address
         self._name = name
-        self._attr_name = name
+        self._attr_name = "Power"
         self._attr_unique_id = f"{address}_power"
         self._is_on = False
         self._available = True
 
-        # Device info for grouping in device registry
-        self._attr_device_info = DeviceInfo(
-            identifiers={(DOMAIN, address)},
-            name=name,
-            manufacturer="iPIXEL",
-            model="LED Matrix Display",
-            sw_version="1.0",
-        )
+        self._attr_device_info = build_device_info(api, address, name)
 
     @property
     def is_on(self) -> bool:
@@ -141,6 +136,8 @@ class iPIXELSwitch(SwitchEntity):
 class iPIXELAntialiasingSwitch(SwitchEntity, RestoreEntity):
     """Representation of an iPIXEL Color antialiasing setting."""
 
+    _attr_has_entity_name = True
+    _attr_entity_category = EntityCategory.CONFIG
     _attr_icon = "mdi:vector-selection"
 
     def __init__(
@@ -160,14 +157,7 @@ class iPIXELAntialiasingSwitch(SwitchEntity, RestoreEntity):
         self._attr_entity_description = "Enable text antialiasing for smooth text (disable for sharp pixels)"
         self._is_on = True  # Default to antialiasing enabled
 
-        # Device info for grouping in device registry
-        self._attr_device_info = DeviceInfo(
-            identifiers={(DOMAIN, address)},
-            name=name,
-            manufacturer="iPIXEL",
-            model="LED Matrix Display",
-            sw_version="1.0",
-        )
+        self._attr_device_info = build_device_info(api, address, name)
 
     async def async_added_to_hass(self) -> None:
         """Run when entity about to be added to hass."""
@@ -203,6 +193,8 @@ class iPIXELAntialiasingSwitch(SwitchEntity, RestoreEntity):
 class iPIXELAutoUpdateSwitch(SwitchEntity, RestoreEntity):
     """Representation of an iPIXEL Color auto-update setting."""
 
+    _attr_has_entity_name = True
+    _attr_entity_category = EntityCategory.CONFIG
     _attr_icon = "mdi:auto-fix"
 
     def __init__(
@@ -222,14 +214,7 @@ class iPIXELAutoUpdateSwitch(SwitchEntity, RestoreEntity):
         self._attr_entity_description = "Automatically update display when text or settings change"
         self._is_on = False  # Default to manual updates only
 
-        # Device info for grouping in device registry
-        self._attr_device_info = DeviceInfo(
-            identifiers={(DOMAIN, address)},
-            name=name,
-            manufacturer="iPIXEL",
-            model="LED Matrix Display",
-            sw_version="1.0",
-        )
+        self._attr_device_info = build_device_info(api, address, name)
 
     async def async_added_to_hass(self) -> None:
         """Run when entity about to be added to hass."""
@@ -270,6 +255,7 @@ class iPIXELFunModeSwitch(SwitchEntity):
     drawing mode — a black screen when enabled is expected.)
     """
 
+    _attr_has_entity_name = True
     _attr_icon = "mdi:draw"
 
     def __init__(self, api: iPIXELAPI, entry: ConfigEntry, address: str, name: str) -> None:
@@ -279,13 +265,7 @@ class iPIXELFunModeSwitch(SwitchEntity):
         self._name = name
         self._attr_name = "DIY Draw Mode"
         self._attr_unique_id = f"{address}_fun_mode"
-        self._attr_device_info = DeviceInfo(
-            identifiers={(DOMAIN, address)},
-            name=name,
-            manufacturer="iPIXEL",
-            model="LED Matrix Display",
-            sw_version="1.0",
-        )
+        self._attr_device_info = build_device_info(api, address, name)
 
     @property
     def is_on(self) -> bool:
@@ -309,6 +289,8 @@ class iPIXELFunModeSwitch(SwitchEntity):
 class iPIXELClock24HSwitch(SwitchEntity, RestoreEntity):
     """Representation of an iPIXEL Color clock 24h format setting."""
 
+    _attr_has_entity_name = True
+    _attr_entity_category = EntityCategory.CONFIG
     _attr_icon = "mdi:clock-time-four-outline"
 
     def __init__(
@@ -330,14 +312,7 @@ class iPIXELClock24HSwitch(SwitchEntity, RestoreEntity):
         self._attr_entity_description = "Use 24-hour format for clock display"
         self._is_on = True  # Default to 24h format
 
-        # Device info for grouping in device registry
-        self._attr_device_info = DeviceInfo(
-            identifiers={(DOMAIN, address)},
-            name=name,
-            manufacturer="iPIXEL",
-            model="LED Matrix Display",
-            sw_version="1.0",
-        )
+        self._attr_device_info = build_device_info(api, address, name)
 
     async def async_added_to_hass(self) -> None:
         """Run when entity about to be added to hass."""
@@ -393,6 +368,8 @@ class iPIXELClock24HSwitch(SwitchEntity, RestoreEntity):
 class iPIXELClockShowDateSwitch(SwitchEntity, RestoreEntity):
     """Representation of an iPIXEL Color clock show date setting."""
 
+    _attr_has_entity_name = True
+    _attr_entity_category = EntityCategory.CONFIG
     _attr_icon = "mdi:calendar-clock"
 
     def __init__(
@@ -414,14 +391,7 @@ class iPIXELClockShowDateSwitch(SwitchEntity, RestoreEntity):
         self._attr_entity_description = "Show date alongside time in clock display"
         self._is_on = True  # Default to showing date
 
-        # Device info for grouping in device registry
-        self._attr_device_info = DeviceInfo(
-            identifiers={(DOMAIN, address)},
-            name=name,
-            manufacturer="iPIXEL",
-            model="LED Matrix Display",
-            sw_version="1.0",
-        )
+        self._attr_device_info = build_device_info(api, address, name)
 
     async def async_added_to_hass(self) -> None:
         """Run when entity about to be added to hass."""

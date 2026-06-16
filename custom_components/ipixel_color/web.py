@@ -103,9 +103,15 @@ def ws_list(hass, connection, msg):
     for entry_id, api in hass.data.get(DOMAIN, {}).items():
         if not hasattr(api, "display_widgets"):
             continue
+        info = getattr(api, "cached_info", None) or {}
         for device in dr.async_entries_for_config_entry(dev_reg, entry_id):
             name = device.name_by_user or device.name or entry_id
-            devices.append({"id": device.id, "name": name})
+            devices.append({
+                "id": device.id,
+                "name": name,
+                "width": int(info.get("width", 32) or 32),
+                "height": int(info.get("height", 32) or 32),
+            })
             break
     connection.send_result(
         msg["id"],

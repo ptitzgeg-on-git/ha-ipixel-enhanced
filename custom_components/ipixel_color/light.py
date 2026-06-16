@@ -13,13 +13,12 @@ from homeassistant.components.light import (
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
-from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.restore_state import RestoreEntity
 
 from .api import iPIXELAPI
 from .const import DOMAIN, CONF_ADDRESS, CONF_NAME
 from .color import rgb_to_hex
-from .common import get_entity_id_by_unique_id
+from .common import get_entity_id_by_unique_id, build_device_info
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -44,6 +43,7 @@ async def async_setup_entry(
 class iPIXELColorLight(LightEntity, RestoreEntity):
     """Base class for iPIXEL color selection light entities."""
 
+    _attr_has_entity_name = True
     _attr_color_mode = ColorMode.RGB
     _attr_supported_color_modes = {ColorMode.RGB}
 
@@ -73,14 +73,7 @@ class iPIXELColorLight(LightEntity, RestoreEntity):
         self._attr_rgb_color = self._default_rgb
         self._attr_brightness = 255  # Full brightness by default
 
-        # Device info for grouping in device registry
-        self._attr_device_info = DeviceInfo(
-            identifiers={(DOMAIN, address)},
-            name=name,
-            manufacturer="iPIXEL",
-            model="LED Matrix Display",
-            sw_version="1.0",
-        )
+        self._attr_device_info = build_device_info(api, address, name)
 
     async def async_added_to_hass(self) -> None:
         """Run when entity about to be added to hass."""

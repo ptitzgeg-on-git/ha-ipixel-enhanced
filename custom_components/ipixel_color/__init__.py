@@ -97,6 +97,14 @@ SET_PROGRAM_SCHEMA = vol.Schema({
     ),
 })
 
+SERVICE_SHOW_CLOCK = "show_clock"
+SHOW_CLOCK_SCHEMA = vol.Schema({
+    vol.Optional("device_id"): vol.Any(None, str, [str]),
+    vol.Optional("style", default=1): vol.All(int, vol.Range(min=0, max=8)),
+    vol.Optional("format_24", default=True): vol.Boolean(),
+    vol.Optional("show_date", default=True): vol.Boolean(),
+})
+
 SERVICE_SET_PIXEL = "set_pixel"
 SET_PIXEL_SCHEMA = vol.Schema({
     vol.Optional("device_id"): vol.Any(None, str, [str]),
@@ -235,6 +243,17 @@ async def _handle_set_program(hass: HomeAssistant, call: ServiceCall) -> None:
     await _resolve_api(hass, call).set_program(call.data["slots"])
 
 
+async def _handle_show_clock(hass: HomeAssistant, call: ServiceCall) -> None:
+    api = _resolve_api(hass, call)
+    if not api.is_connected:
+        await api.connect()
+    await api.set_clock_mode(
+        style=call.data.get("style", 1),
+        show_date=call.data.get("show_date", True),
+        format_24=call.data.get("format_24", True),
+    )
+
+
 async def _handle_set_pixel(hass: HomeAssistant, call: ServiceCall) -> None:
     api = _resolve_api(hass, call)
     color = call.data.get("color", "ffffff").lstrip("#")
@@ -268,33 +287,63 @@ async def _async_global_setup(hass: HomeAssistant) -> None:
 
     ipixel_web.async_register(hass)
 
+    # Frontend assets are served with a long cache, so append the integration
+    # version as a cache-buster — otherwise browsers keep stale JS after an
+    # upgrade. The sidebar panel propagates the same query to the card it loads.
+    version = "0"
+    try:
+        from homeassistant.loader import async_get_integration
+
+        version = str((await async_get_integration(hass, DOMAIN)).version)
+    except Exception as err:  # noqa: BLE001
+        _LOGGER.debug("Could not read integration version: %s", err)
+    card_url = f"{CARD_URL}?v={version}"
+    panel_url = f"{PANEL_URL}?v={version}"
+
     # Serve the whole www/ dir, auto-load the card, and register a sidebar panel
     # so the designer is discoverable without manually adding a Lovelace card.
+    # Each step is independent: a failure in one (e.g. a static path already
+    # registered after a reload) must not stop the sidebar panel registering.
+    www_dir = Path(__file__).parent / "www"
+
     try:
         from homeassistant.components.http import StaticPathConfig
-        from homeassistant.components.frontend import add_extra_js_url
-        from homeassistant.components import panel_custom
 
-        www_dir = Path(__file__).parent / "www"
         await hass.http.async_register_static_paths(
             [StaticPathConfig(STATIC_URL, str(www_dir), True)]
         )
-        add_extra_js_url(hass, CARD_URL)
+    except Exception as err:  # noqa: BLE001
+        _LOGGER.debug("iPIXEL static path already registered or failed: %s", err)
 
-        if not hass.data.get(PANEL_DATA):
+    try:
+        from homeassistant.components.frontend import add_extra_js_url
+
+        add_extra_js_url(hass, card_url)
+    except Exception as err:  # noqa: BLE001
+        _LOGGER.debug("Could not add the iPIXEL card JS url: %s", err)
+
+    if not hass.data.get(PANEL_DATA):
+        try:
+            from homeassistant.components import panel_custom
+
             await panel_custom.async_register_panel(
                 hass,
                 webcomponent_name="ipixel-panel",
                 frontend_url_path="ipixel",
-                module_url=PANEL_URL,
+                module_url=panel_url,
                 sidebar_title="iPIXEL",
                 sidebar_icon="mdi:dots-grid",
                 require_admin=False,
                 embed_iframe=False,
             )
             hass.data[PANEL_DATA] = True
-    except Exception as err:  # noqa: BLE001
-        _LOGGER.warning("Could not auto-register the iPIXEL UI: %s", err)
+            _LOGGER.info("iPIXEL sidebar panel registered at /ipixel")
+        except ValueError as err:
+            # Raised when the frontend_url_path is already registered (reloads).
+            _LOGGER.debug("iPIXEL sidebar panel already registered: %s", err)
+            hass.data[PANEL_DATA] = True
+        except Exception as err:  # noqa: BLE001
+            _LOGGER.warning("Could not register the iPIXEL sidebar panel: %s", err)
 
 
 async def async_setup(hass: HomeAssistant, config: dict) -> bool:
@@ -356,6 +405,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         (SERVICE_SET_PLAYLIST, _handle_set_playlist, SET_PLAYLIST_SCHEMA),
         (SERVICE_SET_PROGRAM, _handle_set_program, SET_PROGRAM_SCHEMA),
         (SERVICE_SET_PIXEL, _handle_set_pixel, SET_PIXEL_SCHEMA),
+        (SERVICE_SHOW_CLOCK, _handle_show_clock, SHOW_CLOCK_SCHEMA),
     ):
         if not hass.services.has_service(DOMAIN, _svc):
             def _make(handler):

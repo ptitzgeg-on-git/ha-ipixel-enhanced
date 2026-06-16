@@ -8,12 +8,12 @@ from homeassistant.components.number import NumberEntity, NumberMode
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
-from homeassistant.helpers.entity import DeviceInfo
+from homeassistant.helpers.entity import EntityCategory
 from homeassistant.helpers.restore_state import RestoreEntity
 
 from .api import iPIXELAPI
 from .const import DOMAIN, CONF_ADDRESS, CONF_NAME
-from .common import get_entity_id_by_unique_id
+from .common import get_entity_id_by_unique_id, build_device_info
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -47,7 +47,8 @@ class iPIXELFontSize(NumberEntity, RestoreEntity):
     _attr_native_max_value = 64.0  # Maximum font size for 32x32 display
     _attr_native_step = 0.5  # Allow half-pixel increments
     _attr_icon = "mdi:format-size"
-    _attr_entity_category = None
+    _attr_has_entity_name = True
+    _attr_entity_category = EntityCategory.CONFIG
 
     def __init__(
         self, 
@@ -66,14 +67,7 @@ class iPIXELFontSize(NumberEntity, RestoreEntity):
         self._attr_native_value = 0.0  # 0 means auto-sizing
         self._attr_entity_description = "Font size in pixels (0 = auto-sizing, supports decimals)"
         
-        # Device info for grouping in device registry
-        self._attr_device_info = DeviceInfo(
-            identifiers={(DOMAIN, address)},
-            name=name,
-            manufacturer="iPIXEL",
-            model="LED Matrix Display",
-            sw_version="1.0",
-        )
+        self._attr_device_info = build_device_info(api, address, name)
 
     async def async_added_to_hass(self) -> None:
         """Run when entity about to be added to hass."""
@@ -120,7 +114,8 @@ class iPIXELLineSpacing(NumberEntity, RestoreEntity):
     _attr_native_max_value = 20  # Maximum 20 pixels of spacing
     _attr_native_step = 1
     _attr_icon = "mdi:format-line-spacing"
-    _attr_entity_category = None
+    _attr_has_entity_name = True
+    _attr_entity_category = EntityCategory.CONFIG
 
     def __init__(
         self, 
@@ -139,14 +134,7 @@ class iPIXELLineSpacing(NumberEntity, RestoreEntity):
         self._attr_native_value = 0  # Default to no extra spacing
         self._attr_entity_description = "Extra spacing between lines in pixels (for multiline text)"
         
-        # Device info for grouping in device registry
-        self._attr_device_info = DeviceInfo(
-            identifiers={(DOMAIN, address)},
-            name=name,
-            manufacturer="iPIXEL",
-            model="LED Matrix Display",
-            sw_version="1.0",
-        )
+        self._attr_device_info = build_device_info(api, address, name)
 
     async def async_added_to_hass(self) -> None:
         """Run when entity about to be added to hass."""
@@ -190,7 +178,7 @@ class iPIXELBrightness(NumberEntity, RestoreEntity):
     _attr_native_max_value = 100  # Maximum brightness
     _attr_native_step = 1
     _attr_icon = "mdi:brightness-6"
-    _attr_entity_category = None
+    _attr_has_entity_name = True
 
     def __init__(
         self, 
@@ -209,14 +197,7 @@ class iPIXELBrightness(NumberEntity, RestoreEntity):
         self._attr_native_value = 50  # Default brightness is 50%
         self._attr_entity_description = "Display brightness level (1-100)"
         
-        # Device info for grouping in device registry
-        self._attr_device_info = DeviceInfo(
-            identifiers={(DOMAIN, address)},
-            name=name,
-            manufacturer="iPIXEL",
-            model="LED Matrix Display",
-            sw_version="1.0",
-        )
+        self._attr_device_info = build_device_info(api, address, name)
 
     async def async_added_to_hass(self) -> None:
         """Run when entity about to be added to hass."""
@@ -273,6 +254,8 @@ class iPIXELTextAnimation(NumberEntity, RestoreEntity):
     _attr_native_max_value = 7
     _attr_native_step = 1
     _attr_icon = "mdi:animation"
+    _attr_has_entity_name = True
+    _attr_entity_category = EntityCategory.CONFIG
 
     def __init__(
         self,
@@ -292,13 +275,7 @@ class iPIXELTextAnimation(NumberEntity, RestoreEntity):
         self._attr_unique_id = f"{address}_text_animation"
         self._attr_native_value = 0  # Default to no animation
 
-        self._attr_device_info = DeviceInfo(
-            identifiers={(DOMAIN, address)},
-            name=name,
-            manufacturer="iPIXEL",
-            model="LED Matrix Display",
-            sw_version="1.0",
-        )
+        self._attr_device_info = build_device_info(api, address, name)
 
     async def async_added_to_hass(self) -> None:
         """Run when entity about to be added to hass."""
@@ -354,6 +331,8 @@ class iPIXELTextSpeed(NumberEntity, RestoreEntity):
     _attr_native_max_value = 100
     _attr_native_step = 5
     _attr_icon = "mdi:speedometer"
+    _attr_has_entity_name = True
+    _attr_entity_category = EntityCategory.CONFIG
 
     def __init__(
         self,
@@ -373,13 +352,7 @@ class iPIXELTextSpeed(NumberEntity, RestoreEntity):
         self._attr_unique_id = f"{address}_text_speed"
         self._attr_native_value = 80  # Default speed
 
-        self._attr_device_info = DeviceInfo(
-            identifiers={(DOMAIN, address)},
-            name=name,
-            manufacturer="iPIXEL",
-            model="LED Matrix Display",
-            sw_version="1.0",
-        )
+        self._attr_device_info = build_device_info(api, address, name)
 
     async def async_added_to_hass(self) -> None:
         """Run when entity about to be added to hass."""
@@ -435,6 +408,8 @@ class iPIXELTextRainbow(NumberEntity, RestoreEntity):
     _attr_native_max_value = 9
     _attr_native_step = 1
     _attr_icon = "mdi:palette"
+    _attr_has_entity_name = True
+    _attr_entity_category = EntityCategory.CONFIG
 
     def __init__(
         self,
@@ -454,13 +429,7 @@ class iPIXELTextRainbow(NumberEntity, RestoreEntity):
         self._attr_unique_id = f"{address}_text_rainbow"
         self._attr_native_value = 0  # Default to no rainbow
 
-        self._attr_device_info = DeviceInfo(
-            identifiers={(DOMAIN, address)},
-            name=name,
-            manufacturer="iPIXEL",
-            model="LED Matrix Display",
-            sw_version="1.0",
-        )
+        self._attr_device_info = build_device_info(api, address, name)
 
     async def async_added_to_hass(self) -> None:
         """Run when entity about to be added to hass."""

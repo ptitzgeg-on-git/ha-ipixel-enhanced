@@ -8,11 +8,10 @@ from homeassistant.components.button import ButtonEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
-from homeassistant.helpers.entity import DeviceInfo
 
 from .api import iPIXELAPI
 from .const import DOMAIN, CONF_ADDRESS, CONF_NAME
-from .common import update_ipixel_display
+from .common import update_ipixel_display, build_device_info
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -37,6 +36,7 @@ async def async_setup_entry(
 class iPIXELUpdateButton(ButtonEntity):
     """Representation of an iPIXEL Color update button."""
 
+    _attr_has_entity_name = True
     _attr_icon = "mdi:refresh"
 
     def __init__(
@@ -57,14 +57,7 @@ class iPIXELUpdateButton(ButtonEntity):
         self._attr_unique_id = f"{address}_update_button"
         self._attr_entity_description = "Manually update display with current text and settings"
         
-        # Device info for grouping in device registry
-        self._attr_device_info = DeviceInfo(
-            identifiers={(DOMAIN, address)},
-            name=name,
-            manufacturer="iPIXEL",
-            model="LED Matrix Display",
-            sw_version="1.0",
-        )
+        self._attr_device_info = build_device_info(api, address, name)
 
     async def async_press(self) -> None:
         """Handle button press to update display."""
@@ -80,6 +73,7 @@ class iPIXELUpdateButton(ButtonEntity):
 class iPIXELSyncTimeButton(ButtonEntity):
     """Representation of an iPIXEL Color time sync button."""
 
+    _attr_has_entity_name = True
     _attr_icon = "mdi:clock-sync"
 
     def __init__(
@@ -100,14 +94,7 @@ class iPIXELSyncTimeButton(ButtonEntity):
         self._attr_unique_id = f"{address}_sync_time_button"
         self._attr_entity_description = "Sync current time to device clock"
 
-        # Device info for grouping in device registry
-        self._attr_device_info = DeviceInfo(
-            identifiers={(DOMAIN, address)},
-            name=name,
-            manufacturer="iPIXEL",
-            model="LED Matrix Display",
-            sw_version="1.0",
-        )
+        self._attr_device_info = build_device_info(api, address, name)
 
     async def async_press(self) -> None:
         """Handle button press to sync time."""

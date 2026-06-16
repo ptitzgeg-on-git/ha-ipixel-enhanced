@@ -3,11 +3,34 @@ from __future__ import annotations
 
 import logging
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.template import Template
 from homeassistant.helpers import entity_registry as er
 from .const import MODE_TEXT_IMAGE, MODE_TEXT, MODE_CLOCK, DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
+
+
+def build_device_info(api, address: str, name: str) -> DeviceInfo:
+    """Build a single DeviceInfo for all entities of one panel.
+
+    Uses the real model/firmware the panel reported over BLE when available
+    instead of hardcoded placeholders.
+    """
+    info = getattr(api, "cached_info", None) or {}
+    # Report the real firmware when the panel gives one; otherwise leave it
+    # blank rather than inventing a version. The device type is surfaced
+    # separately as a diagnostic sensor.
+    sw_version = info.get("mcu_version")
+    if not sw_version or str(sw_version).lower() == "unknown":
+        sw_version = None
+    return DeviceInfo(
+        identifiers={(DOMAIN, address)},
+        name=name,
+        manufacturer="iPIXEL",
+        model="LED Matrix Display",
+        sw_version=sw_version,
+    )
 
 
 def rgb_to_hex(r: int, g: int, b: int) -> str:
