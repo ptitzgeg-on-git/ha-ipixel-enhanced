@@ -86,6 +86,19 @@ an automation (e.g. on a `time_pattern` trigger every minute).
 > The card ships **starter examples** (Battery bar, Temperature, Two sensors,
 > Alert) — pick one from the *Examples* dropdown and swap in your entity names.
 
+> **No typing needed:** in the visual editor, `text` and `progress` widgets have
+> a **＋ HA entity** box — start typing an entity name, pick it, and the
+> `{{ states('…') }}` template is filled in for you.
+
+### Clock & live refresh
+
+A `clock` widget (and any template) is rendered to a **still image** and sent
+once — it does not tick on its own. To keep it live, add the page to a
+**playlist** (even a single page): each page re-renders on its interval, so
+sensors and the clock update. For a **clock-only** display, prefer the panel's
+**native clock mode** (the device's `select` mode → clock) — it ticks by itself
+with no Bluetooth traffic.
+
 ### Fonts
 
 Pixel fonts render crisp 1-bit by default. Readable native sizes:

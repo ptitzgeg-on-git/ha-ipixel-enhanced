@@ -199,7 +199,9 @@ async def _prefetch_assets(hass: HomeAssistant, widgets: list[dict]) -> dict[int
 
 
 def _emoji_codepoint(emoji: str) -> str:
-    return "-".join(f"{ord(c):x}" for c in emoji if c not in ("️", "‍"))
+    # Twemoji filenames keep the ZWJ (200d) joiner but omit the FE0F selector,
+    # e.g. 👨‍💻 -> "1f468-200d-1f4bb". Only strip FE0F.
+    return "-".join(f"{ord(c):x}" for c in emoji if c != "️")
 
 
 # ---------------------------------------------------------------------------

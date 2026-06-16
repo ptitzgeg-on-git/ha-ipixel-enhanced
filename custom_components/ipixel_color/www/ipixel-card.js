@@ -209,10 +209,21 @@ class IPixelCard extends HTMLElement {
 
     card.appendChild(root);
     card.appendChild(this._styles());
+    card.appendChild(this._buildEntityDatalist());
     this.appendChild(card);
 
     this._renderEditor();
     this._renderPreview();
+  }
+
+  _buildEntityDatalist() {
+    const dl = el("datalist", { id: "ipx-entities" });
+    const states = (this._hass && this._hass.states) || {};
+    for (const id of Object.keys(states).sort()) {
+      const fn = states[id].attributes && states[id].attributes.friendly_name;
+      dl.appendChild(el("option", { value: id }, fn || id));
+    }
+    return dl;
   }
 
   _styles() {
@@ -361,6 +372,10 @@ class IPixelCard extends HTMLElement {
       row.appendChild(this._field(w, key, kind, label));
     }
 
+    // simple "bind a HA entity" helper -> builds the {{ states(...) }} template
+    const bindKey = w.type === "text" ? "text" : (w.type === "progress" ? "value" : null);
+    if (bindKey) row.appendChild(this._entityBind(w, bindKey));
+
     // controls
     const ctrl = el("div", { style: "margin-left:auto;display:flex;gap:4px;" }, [
       el("button", { class: "ipx-btn", onclick: () => this._move(i, -1) }, "↑"),
@@ -369,6 +384,25 @@ class IPixelCard extends HTMLElement {
     ]);
     row.appendChild(ctrl);
     return row;
+  }
+
+  _entityBind(w, key) {
+    const inp = el("input", {
+      class: "ipx-input", list: "ipx-entities", placeholder: "pick entity…",
+      style: "width:140px;",
+    });
+    const apply = () => {
+      const id = inp.value.trim();
+      if (id && this._hass && this._hass.states && this._hass.states[id]) {
+        w[key] = `{{ states('${id}') }}`;
+        inp.value = "";
+        this._renderEditor();
+        this._schedulePreview();
+        this._status(`Bound ${key} to ${id}`);
+      }
+    };
+    inp.addEventListener("change", apply);
+    return this._labeled("＋ HA entity", inp);
   }
 
   _field(w, key, kind, label) {
@@ -462,7 +496,12 @@ class IPixelCard extends HTMLElement {
   // ---- playlist ----
   _buildPlaylistSection() {
     const box = el("div", { style: "border-top:1px solid var(--divider-color);padding-top:10px;display:flex;flex-direction:column;gap:8px;" });
-    box.appendChild(el("b", {}, "Playlist (auto-rotate pages)"));
+    box.appendChild(el("b", {}, "Playlist (auto-rotate & auto-refresh pages)"));
+    box.appendChild(el("div", {
+      style: "font-size:12px;color:var(--secondary-text-color);",
+    }, "Each page re-renders on its interval — so dynamic data (sensors, clock) stays live. " +
+       "For a single live page, add just that one page. Tip: for a pure clock, use the device's " +
+       "native clock mode instead (it ticks with no Bluetooth traffic)."));
     this._plEnabled = el("input", { type: "checkbox" });
     this._plList = el("div", {});
     this._plTarget = el("select", { class: "ipx-input" });
