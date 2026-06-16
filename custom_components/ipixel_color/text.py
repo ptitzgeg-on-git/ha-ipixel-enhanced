@@ -8,13 +8,12 @@ from homeassistant.components.text import TextEntity, TextMode
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
-from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.restore_state import RestoreEntity
 
 from .api import iPIXELAPI, iPIXELConnectionError
 from .const import DOMAIN, CONF_ADDRESS, CONF_NAME
 from .common import get_entity_id_by_unique_id
-from .common import resolve_template_variables, update_ipixel_display
+from .common import resolve_template_variables, update_ipixel_display, build_device_info
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -38,6 +37,7 @@ async def async_setup_entry(
 class iPIXELTextDisplay(TextEntity, RestoreEntity):
     """Representation of an iPIXEL Color text display."""
 
+    _attr_has_entity_name = True
     _attr_mode = TextMode.TEXT
     _attr_native_max = 500  # Maximum 500 characters per protocol
 
@@ -66,14 +66,7 @@ class iPIXELTextDisplay(TextEntity, RestoreEntity):
         self._color_fg = (255, 255, 255)  # White text
         self._color_bg = (0, 0, 0)  # Black background
 
-        # Device info for grouping in device registry
-        self._attr_device_info = DeviceInfo(
-            identifiers={(DOMAIN, address)},
-            name=name,
-            manufacturer="iPIXEL",
-            model="LED Matrix Display",
-            sw_version="1.0",
-        )
+        self._attr_device_info = build_device_info(api, address, name)
 
     async def async_added_to_hass(self) -> None:
         """Run when entity about to be added to hass."""

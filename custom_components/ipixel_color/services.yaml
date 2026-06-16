@@ -1,57 +1,120 @@
-display_text:
-  name: Display Text
-  description: Display text on the iPIXEL device with custom effects and colors
+show_text:
+  name: Show text
+  description: Scroll or display text on the panel using the device's built-in text engine (ticks on the panel, no Bluetooth traffic once sent).
   target:
-    entity:
+    device:
       integration: ipixel_color
-      domain: text
   fields:
     text:
       name: Text
-      description: Text to display (max 500 characters)
+      description: Text to display (templates are supported, max 500 characters)
       required: true
-      example: "Hello World"
+      example: "Hello {{ states('sensor.outdoor_temperature') }}°"
       selector:
         text:
-    effect:
-      name: Effect
-      description: Display effect for the text
+    color:
+      name: Text color (hex)
+      description: Foreground colour as a hex string, e.g. ffaa00.
       required: false
-      default: "scroll_ltr"
+      default: "ffffff"
+      example: "ffaa00"
       selector:
-        select:
-          options:
-            - "fixed"
-            - "scroll_rtl"
-            - "scroll_ltr"
-            - "blink"
-            - "breeze"
-            - "snow"
-            - "laser"
-    speed:
-      name: Speed
-      description: Animation speed (1-100)
+        text:
+    bg_color:
+      name: Background color (hex)
+      description: Background colour as a hex string. 000000 = transparent/off.
       required: false
-      default: 50
+      default: "000000"
+      example: "000000"
+      selector:
+        text:
+    animation:
+      name: Animation
+      description: 0=fixed, 1=scroll left, 2=scroll right, 3=scroll up, 4=scroll down, 5=blink, 6=breeze, 7=snow, 8=laser (0-10).
+      required: false
+      default: 1
       selector:
         number:
-          min: 1
+          min: 0
+          max: 10
+          mode: box
+    speed:
+      name: Speed
+      description: Animation speed (0-100).
+      required: false
+      default: 60
+      selector:
+        number:
+          min: 0
           max: 100
           mode: slider
-    color_fg:
-      name: Text Color
-      description: Foreground text color
+    rainbow:
+      name: Rainbow
+      description: Rainbow colour cycling mode (0=off, 1-3 styles).
       required: false
-      default: [255, 255, 255]
+      default: 0
       selector:
-        color_rgb:
-    color_bg:
-      name: Background Color
-      description: Background color
+        number:
+          min: 0
+          max: 3
+          mode: box
+
+show_emoji:
+  name: Show emoji
+  description: Render a colour emoji full-screen on the panel (Twemoji).
+  target:
+    device:
+      integration: ipixel_color
+  fields:
+    emoji:
+      name: Emoji
+      description: A single emoji to display.
+      required: true
+      example: "🔔"
+      selector:
+        text:
+    bg_color:
+      name: Background color
+      description: Background colour behind the emoji.
       required: false
       default: [0, 0, 0]
       selector:
         color_rgb:
+
+show_clock:
+  name: Show clock
+  description: >-
+    Switch the panel to its native clock mode. The clock then ticks on the
+    device itself with no Bluetooth traffic — use this from automations (setting
+    the Clock entities alone does not refresh the display).
+  target:
+    device:
+      integration: ipixel_color
+  fields:
+    style:
+      name: Style
+      description: Clock face style (0-8).
+      required: false
+      default: 1
+      selector:
+        number:
+          min: 0
+          max: 8
+          mode: slider
+    format_24:
+      name: 24-hour format
+      description: Use 24-hour time (off = 12-hour).
+      required: false
+      default: true
+      selector:
+        boolean:
+    show_date:
+      name: Show date
+      description: Show the date alongside the time.
+      required: false
+      default: true
+      selector:
+        boolean:
 
 show_page:
   name: Show page

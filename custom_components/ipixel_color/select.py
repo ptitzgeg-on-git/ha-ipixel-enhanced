@@ -10,13 +10,13 @@ from homeassistant.components.select import SelectEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
-from homeassistant.helpers.entity import DeviceInfo
+from homeassistant.helpers.entity import EntityCategory
 from homeassistant.helpers.restore_state import RestoreEntity
 
 from .api import iPIXELAPI
 from .const import DOMAIN, CONF_ADDRESS, CONF_NAME, AVAILABLE_MODES, DEFAULT_MODE
 from .common import get_entity_id_by_unique_id
-from .common import update_ipixel_display
+from .common import update_ipixel_display, build_device_info
 from .fonts import get_available_fonts
 
 _LOGGER = logging.getLogger(__name__)
@@ -47,6 +47,7 @@ ORIENTATION_OPTIONS = {"0°": 0, "90°": 1, "180°": 2, "270°": 3}
 class iPIXELOrientationSelect(SelectEntity, RestoreEntity):
     """Rotate the display (hardware orientation, affects all modes)."""
 
+    _attr_has_entity_name = True
     _attr_icon = "mdi:screen-rotation"
 
     def __init__(self, api: iPIXELAPI, entry: ConfigEntry, address: str, name: str) -> None:
@@ -58,13 +59,7 @@ class iPIXELOrientationSelect(SelectEntity, RestoreEntity):
         self._attr_unique_id = f"{address}_orientation"
         self._attr_options = list(ORIENTATION_OPTIONS.keys())
         self._attr_current_option = "0°"
-        self._attr_device_info = DeviceInfo(
-            identifiers={(DOMAIN, address)},
-            name=name,
-            manufacturer="iPIXEL",
-            model="LED Matrix Display",
-            sw_version="1.0",
-        )
+        self._attr_device_info = build_device_info(api, address, name)
 
     async def async_added_to_hass(self) -> None:
         await super().async_added_to_hass()
@@ -89,6 +84,9 @@ class iPIXELOrientationSelect(SelectEntity, RestoreEntity):
 class iPIXELFontSelect(SelectEntity, RestoreEntity):
     """Representation of an iPIXEL Color font selection."""
 
+    _attr_has_entity_name = True
+    _attr_entity_category = EntityCategory.CONFIG
+
     def __init__(
         self, 
         hass: HomeAssistant,
@@ -111,14 +109,7 @@ class iPIXELFontSelect(SelectEntity, RestoreEntity):
         self._attr_options = get_available_fonts()
         self._attr_current_option = "OpenSans-Light.ttf" if "OpenSans-Light.ttf" in self._attr_options else self._attr_options[0]
         
-        # Device info for grouping in device registry
-        self._attr_device_info = DeviceInfo(
-            identifiers={(DOMAIN, address)},
-            name=name,
-            manufacturer="iPIXEL",
-            model="LED Matrix Display",
-            sw_version="1.0",
-        )
+        self._attr_device_info = build_device_info(api, address, name)
 
     async def async_added_to_hass(self) -> None:
         """Run when entity about to be added to hass."""
@@ -169,6 +160,8 @@ class iPIXELFontSelect(SelectEntity, RestoreEntity):
 class iPIXELModeSelect(SelectEntity, RestoreEntity):
     """Representation of an iPIXEL Color mode selection."""
 
+    _attr_has_entity_name = True
+
     def __init__(
         self,
         hass: HomeAssistant,
@@ -191,14 +184,7 @@ class iPIXELModeSelect(SelectEntity, RestoreEntity):
         self._attr_options = AVAILABLE_MODES
         self._attr_current_option = DEFAULT_MODE
 
-        # Device info for grouping in device registry
-        self._attr_device_info = DeviceInfo(
-            identifiers={(DOMAIN, address)},
-            name=name,
-            manufacturer="iPIXEL",
-            model="LED Matrix Display",
-            sw_version="1.0",
-        )
+        self._attr_device_info = build_device_info(api, address, name)
 
     async def async_added_to_hass(self) -> None:
         """Run when entity about to be added to hass."""
@@ -249,6 +235,9 @@ class iPIXELModeSelect(SelectEntity, RestoreEntity):
 class iPIXELClockStyleSelect(SelectEntity, RestoreEntity):
     """Representation of an iPIXEL Color clock style selection."""
 
+    _attr_has_entity_name = True
+    _attr_entity_category = EntityCategory.CONFIG
+
     def __init__(
         self,
         hass: HomeAssistant,
@@ -271,14 +260,7 @@ class iPIXELClockStyleSelect(SelectEntity, RestoreEntity):
         self._attr_options = ["0", "1", "2", "3", "4", "5", "6", "7", "8"]
         self._attr_current_option = "1"  # Default style
 
-        # Device info for grouping in device registry
-        self._attr_device_info = DeviceInfo(
-            identifiers={(DOMAIN, address)},
-            name=name,
-            manufacturer="iPIXEL",
-            model="LED Matrix Display",
-            sw_version="1.0",
-        )
+        self._attr_device_info = build_device_info(api, address, name)
 
     async def async_added_to_hass(self) -> None:
         """Run when entity about to be added to hass."""

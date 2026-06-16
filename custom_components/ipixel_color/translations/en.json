@@ -64,30 +64,33 @@
     }
   },
   "services": {
-    "display_text": {
-      "name": "Display Text",
-      "description": "Display text on the iPIXEL device with custom effects and colors",
+    "show_text": {
+      "name": "Show text",
+      "description": "Scroll or display text on the panel using the device's built-in text engine.",
       "fields": {
-        "text": {
-          "name": "Text",
-          "description": "Text to display (max 500 characters)"
-        },
-        "effect": {
-          "name": "Effect",
-          "description": "Display effect for the text"
-        },
-        "speed": {
-          "name": "Speed",
-          "description": "Animation speed (1-100)"
-        },
-        "color_fg": {
-          "name": "Text Color",
-          "description": "Foreground text color"
-        },
-        "color_bg": {
-          "name": "Background Color",
-          "description": "Background color"
-        }
+        "text": { "name": "Text", "description": "Text to display (templates supported, max 500 characters)." },
+        "color": { "name": "Text color (hex)", "description": "Foreground colour as a hex string, e.g. ffaa00." },
+        "bg_color": { "name": "Background color (hex)", "description": "Background colour as a hex string. 000000 = transparent/off." },
+        "animation": { "name": "Animation", "description": "0=fixed, 1=scroll left, 2=scroll right, 3=up, 4=down, 5=blink, 6=breeze, 7=snow, 8=laser." },
+        "speed": { "name": "Speed", "description": "Animation speed (0-100)." },
+        "rainbow": { "name": "Rainbow", "description": "Rainbow colour cycling mode (0=off, 1-3 styles)." }
+      }
+    },
+    "show_emoji": {
+      "name": "Show emoji",
+      "description": "Render a colour emoji full-screen on the panel (Twemoji).",
+      "fields": {
+        "emoji": { "name": "Emoji", "description": "A single emoji to display." },
+        "bg_color": { "name": "Background color", "description": "Background colour behind the emoji." }
+      }
+    },
+    "show_clock": {
+      "name": "Show clock",
+      "description": "Switch the panel to its native clock mode (ticks on the device, no Bluetooth traffic). Use this from automations.",
+      "fields": {
+        "style": { "name": "Style", "description": "Clock face style (0-8)." },
+        "format_24": { "name": "24-hour format", "description": "Use 24-hour time (off = 12-hour)." },
+        "show_date": { "name": "Show date", "description": "Show the date alongside the time." }
       }
     }
   }

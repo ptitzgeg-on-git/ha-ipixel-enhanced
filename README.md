@@ -82,8 +82,9 @@ playlist target all let you address a specific panel.
 | Service | Purpose |
 |---|---|
 | `ipixel_color.show_page` | Render a saved page (`name`) or an inline `page` and push it to a device. Optional `save_slot` stores it on the device. |
-| `ipixel_color.show_text` | Quick scrolling text. |
+| `ipixel_color.show_text` | Quick scrolling text (templates supported). |
 | `ipixel_color.show_emoji` | Show a single emoji. |
+| `ipixel_color.show_clock` | Switch the panel to its native clock mode (ticks on the device). Use this from automations. |
 | `ipixel_color.show_image` | Send an image or **animated GIF** (URL or `/local/...`). GIFs play natively. |
 | `ipixel_color.set_orientation` | Rotate the display (0/90/180/270°). Also an **Orientation** select entity. |
 | `ipixel_color.set_fun_mode` | Toggle the panel's built-in effect mode. Also a **Fun Mode** switch. |
