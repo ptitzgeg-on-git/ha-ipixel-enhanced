@@ -258,6 +258,13 @@ async def _handle_render_preview(hass: HomeAssistant, call: ServiceCall) -> None
     )
 
 
+async def async_setup(hass: HomeAssistant, config: dict) -> bool:
+    """Component-level setup: register the designer card, preview view and
+    page store once — independent of whether any display is reachable."""
+    await _async_global_setup(hass)
+    return True
+
+
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     address = entry.data[CONF_ADDRESS]
     name = entry.data[CONF_NAME]
@@ -275,7 +282,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     hass.data.setdefault(DOMAIN, {})
     hass.data[DOMAIN][entry.entry_id] = api
     entry.runtime_data = api
-    await _async_global_setup(hass)
+    await _async_global_setup(hass)  # idempotent; ensures setup if async_setup was skipped
     # Warm the font cache in an executor so the font select entity doesn't
     # scan the fonts directory (blocking glob/rglob) inside the event loop.
     from .fonts import get_available_fonts
