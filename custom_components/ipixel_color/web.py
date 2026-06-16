@@ -72,6 +72,26 @@ def _runner(hass: HomeAssistant):
     return hass.data.get(f"{DOMAIN}_runner")
 
 
+def _api_for_device(hass: HomeAssistant, device_id: str | None):
+    """Resolve a device_id (or first device) to its iPIXEL API instance."""
+    apis = {
+        k: v for k, v in hass.data.get(DOMAIN, {}).items()
+        if hasattr(v, "display_widgets")
+    }
+    if not apis:
+        return None
+    if device_id:
+        if device_id in apis:
+            return apis[device_id]
+        from homeassistant.helpers import device_registry as dr
+        device = dr.async_get(hass).async_get(device_id)
+        if device:
+            for entry_id in device.config_entries:
+                if entry_id in apis:
+                    return apis[entry_id]
+    return next(iter(apis.values()))
+
+
 @websocket_api.websocket_command({vol.Required("type"): "ipixel_color/pages/list"})
 @callback
 def ws_list(hass, connection, msg):
@@ -141,6 +161,26 @@ async def ws_set_playlist(hass, connection, msg):
     connection.send_result(msg["id"], {"playlist": store.playlist})
 
 
+@websocket_api.websocket_command({
+    vol.Required("type"): "ipixel_color/draw_grid",
+    vol.Optional("target"): vol.Any(None, str),
+    vol.Required("width"): int,
+    vol.Required("height"): int,
+    vol.Required("pixels"): list,
+    vol.Optional("background", default="000000"): str,
+})
+@websocket_api.async_response
+async def ws_draw_grid(hass, connection, msg):
+    api = _api_for_device(hass, msg.get("target"))
+    if api is None:
+        connection.send_error(msg["id"], "no_device", "No iPIXEL device available")
+        return
+    ok = await api.display_grid(
+        msg["pixels"], msg["width"], msg["height"], msg.get("background", "000000")
+    )
+    connection.send_result(msg["id"], {"sent": ok})
+
+
 @callback
 def async_register(hass: HomeAssistant) -> None:
     """Register the HTTP view and websocket commands (idempotent)."""
@@ -151,4 +191,5 @@ def async_register(hass: HomeAssistant) -> None:
     websocket_api.async_register_command(hass, ws_save)
     websocket_api.async_register_command(hass, ws_delete)
     websocket_api.async_register_command(hass, ws_set_playlist)
+    websocket_api.async_register_command(hass, ws_draw_grid)
     hass.data[f"{DOMAIN}_web_registered"] = True

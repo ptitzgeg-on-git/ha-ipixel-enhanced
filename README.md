@@ -39,23 +39,28 @@ The designer card is registered automatically — no manual resource needed.
 
 ---
 
-## Using the page designer
+## Using the iPIXEL Studio
 
 After install, an **iPIXEL** entry appears in the Home Assistant **sidebar** —
-open it to get the full-page designer. (You can also add it to any dashboard
-with `type: custom:ipixel-card`.)
+open it for the full studio. (You can also add it to any dashboard with
+`type: custom:ipixel-card`.) Pick your device top-right (multiple panels
+supported), then use the tabs:
 
-Then:
+- **🎨 Designer** — build a page from widgets with a live 32×32 preview; bind HA
+  entities with the *＋ HA entity* picker; **Send now**, save to your library, or
+  load a starter example. Visual editor + a Code (JSON) mode.
+- **✏️ Draw** — a clickable 32×32 grid: pick a colour and paint. **Send drawing**
+  pushes the whole picture; **Live draw** lights each pixel on the panel as you
+  click (enables the device's DIY mode). No service calls needed.
+- **🔁 Playlist** — auto-rotate saved pages (also keeps dynamic data refreshed).
+- **💾 Slots** — save pages into the panel's own memory and make it **cycle them
+  by itself** (native animation, works with HA off). Show/delete slots too.
+- **⚙️ Device** — power, brightness, orientation, DIY mode, clock style and the
+  rhythm/visualizer animation, all in one place.
 
-1. Pick your **device** (multiple iPIXEL displays are supported — each shows up
-   as its own device, and the designer/playlist let you target each one).
-2. **Add widget** → choose a type, set its content, position and colour.
-3. Watch the **live preview** update.
-4. **Send now** to push it to the display, or **Save** it to your library.
-5. (Optional) Build a **playlist** and enable it to auto-rotate pages on a
-   chosen device.
-
-See **[WIDGETS.md](WIDGETS.md)** for the full widget reference.
+So `set_pixel`, `set_program`, etc. are driven from the UI — no need to call
+those services by hand. See **[WIDGETS.md](WIDGETS.md)** for the widget
+reference and **[AUTOMATIONS.md](AUTOMATIONS.md)** for automation recipes.
 
 ## Wrong size / cropped display?
 

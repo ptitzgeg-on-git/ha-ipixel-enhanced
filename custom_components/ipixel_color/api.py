@@ -253,6 +253,41 @@ class iPIXELAPI:
             _LOGGER.exception("Error displaying widget page: %s", err)
             return False
 
+    async def display_grid(self, pixels: list, width: int, height: int, background: str = "000000") -> bool:
+        """Send a hand-drawn pixel grid as one image.
+
+        pixels: row-major list of length width*height; each item is 'rrggbb'
+        (or empty/None for the background colour).
+        """
+        from .display.widget_renderer import parse_color
+
+        def _build() -> bytes:
+            import io
+            from PIL import Image
+            img = Image.new("RGB", (width, height), parse_color(background, (0, 0, 0)))
+            px = img.load()
+            for i, c in enumerate(pixels):
+                if not c:
+                    continue
+                x, y = i % width, i // width
+                if 0 <= x < width and 0 <= y < height:
+                    px[x, y] = parse_color(c, (0, 0, 0))
+            buf = io.BytesIO()
+            img.save(buf, format="PNG")
+            return buf.getvalue()
+
+        try:
+            device_info = await self.get_device_info()
+            png = await self._hass.async_add_executor_job(_build)
+            commands = make_image_command(
+                image_bytes=png, file_extension=".png",
+                resize_method="crop", device_info_dict=device_info,
+            )
+            return await self._send_image_commands(commands, "grid")
+        except Exception as err:  # noqa: BLE001
+            _LOGGER.exception("Error displaying grid: %s", err)
+            return False
+
     async def display_image_file(self, data: bytes, file_extension: str = ".gif", save_slot: int = 0) -> bool:
         """Send a raw image/GIF file as-is. Animated GIFs play natively on the
         panel (pypixelcolor uploads every frame)."""
