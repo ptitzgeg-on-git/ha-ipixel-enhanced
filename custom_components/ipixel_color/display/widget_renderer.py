@@ -42,8 +42,8 @@ from .emoji_renderer import fetch_emoji_png
 
 _LOGGER = logging.getLogger(__name__)
 
-DEFAULT_FONT = "WP7xn"
-DEFAULT_FONT_SIZE = 7
+DEFAULT_FONT = "Tiny5"
+DEFAULT_FONT_SIZE = 8
 EMOJI_DOWNLOAD_TIMEOUT = 10
 
 ANCHORS = {

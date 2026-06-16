@@ -36,6 +36,7 @@ async def async_setup_entry(
         iPIXELAutoUpdateSwitch(api, entry, address, name),
         iPIXELClock24HSwitch(hass, api, entry, address, name),
         iPIXELClockShowDateSwitch(hass, api, entry, address, name),
+        iPIXELFunModeSwitch(api, entry, address, name),
     ])
 
 
@@ -259,6 +260,45 @@ class iPIXELAutoUpdateSwitch(SwitchEntity, RestoreEntity):
         """Disable auto-update."""
         self._is_on = False
         _LOGGER.debug("Auto-update disabled - use update button for manual updates")
+
+
+class iPIXELFunModeSwitch(SwitchEntity):
+    """Toggle the panel's built-in 'fun' effect mode."""
+
+    _attr_icon = "mdi:party-popper"
+
+    def __init__(self, api: iPIXELAPI, entry: ConfigEntry, address: str, name: str) -> None:
+        self._api = api
+        self._entry = entry
+        self._address = address
+        self._name = name
+        self._attr_name = "Fun Mode"
+        self._attr_unique_id = f"{address}_fun_mode"
+        self._attr_device_info = DeviceInfo(
+            identifiers={(DOMAIN, address)},
+            name=name,
+            manufacturer="iPIXEL",
+            model="LED Matrix Display",
+            sw_version="1.0",
+        )
+
+    @property
+    def is_on(self) -> bool:
+        return self._api.fun_mode
+
+    @property
+    def available(self) -> bool:
+        return True
+
+    async def async_turn_on(self, **kwargs: Any) -> None:
+        if not self._api.is_connected:
+            await self._api.connect()
+        await self._api.set_fun_mode(True)
+
+    async def async_turn_off(self, **kwargs: Any) -> None:
+        if not self._api.is_connected:
+            await self._api.connect()
+        await self._api.set_fun_mode(False)
 
 
 class iPIXELClock24HSwitch(SwitchEntity, RestoreEntity):

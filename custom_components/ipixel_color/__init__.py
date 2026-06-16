@@ -33,6 +33,38 @@ SHOW_PAGE_SCHEMA = vol.Schema({
     vol.Optional("device_id"): vol.Any(None, str, [str]),
     vol.Optional("name"): str,
     vol.Optional("page"): dict,
+    vol.Optional("save_slot", default=0): vol.All(int, vol.Range(min=0, max=255)),
+})
+
+SERVICE_SET_ORIENTATION = "set_orientation"
+SET_ORIENTATION_SCHEMA = vol.Schema({
+    vol.Optional("device_id"): vol.Any(None, str, [str]),
+    vol.Required("orientation"): vol.All(int, vol.Range(min=0, max=3)),
+})
+
+SERVICE_SET_FUN_MODE = "set_fun_mode"
+SET_FUN_MODE_SCHEMA = vol.Schema({
+    vol.Optional("device_id"): vol.Any(None, str, [str]),
+    vol.Required("enable"): vol.Boolean(),
+})
+
+SERVICE_SHOW_IMAGE = "show_image"
+SHOW_IMAGE_SCHEMA = vol.Schema({
+    vol.Optional("device_id"): vol.Any(None, str, [str]),
+    vol.Required("source"): str,
+    vol.Optional("save_slot", default=0): vol.All(int, vol.Range(min=0, max=255)),
+})
+
+SERVICE_SHOW_SLOT = "show_slot"
+SHOW_SLOT_SCHEMA = vol.Schema({
+    vol.Optional("device_id"): vol.Any(None, str, [str]),
+    vol.Required("slot"): vol.All(int, vol.Range(min=0, max=255)),
+})
+
+SERVICE_DELETE_SLOT = "delete_slot"
+DELETE_SLOT_SCHEMA = vol.Schema({
+    vol.Optional("device_id"): vol.Any(None, str, [str]),
+    vol.Required("slot"): vol.All(int, vol.Range(min=0, max=255)),
 })
 
 SERVICE_SHOW_TEXT = "show_text"
@@ -115,7 +147,37 @@ async def _handle_show_page(hass: HomeAssistant, call: ServiceCall) -> None:
         if not store or not name or name not in store.pages:
             raise HomeAssistantError(f"Unknown page '{name}' — save it in the iPIXEL card first")
         page = store.pages[name]
-    await api.display_widgets(page)
+    await api.display_widgets(page, save_slot=call.data.get("save_slot", 0))
+
+
+async def _handle_set_orientation(hass: HomeAssistant, call: ServiceCall) -> None:
+    await _resolve_api(hass, call).set_orientation(call.data["orientation"])
+
+
+async def _handle_set_fun_mode(hass: HomeAssistant, call: ServiceCall) -> None:
+    await _resolve_api(hass, call).set_fun_mode(call.data["enable"])
+
+
+async def _handle_show_slot(hass: HomeAssistant, call: ServiceCall) -> None:
+    await _resolve_api(hass, call).show_slot(call.data["slot"])
+
+
+async def _handle_delete_slot(hass: HomeAssistant, call: ServiceCall) -> None:
+    await _resolve_api(hass, call).delete_slot(call.data["slot"])
+
+
+async def _handle_show_image(hass: HomeAssistant, call: ServiceCall) -> None:
+    from .display.widget_renderer import _read_local_image, _fetch_remote_image
+    api = _resolve_api(hass, call)
+    source = call.data["source"].strip()
+    if source.startswith(("http://", "https://")):
+        data = await _fetch_remote_image(hass, source)
+    else:
+        data = await hass.async_add_executor_job(_read_local_image, hass, source)
+    if not data:
+        raise HomeAssistantError(f"Could not read image source: {source}")
+    ext = "." + source.rsplit(".", 1)[-1].lower() if "." in source.rsplit("/", 1)[-1] else ".gif"
+    await api.display_image_file(data, file_extension=ext, save_slot=call.data.get("save_slot", 0))
 
 
 async def _async_global_setup(hass: HomeAssistant) -> None:
@@ -207,6 +269,20 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         async def _show_page_service(call: ServiceCall) -> None:
             await _handle_show_page(hass, call)
         hass.services.async_register(DOMAIN, SERVICE_SHOW_PAGE, _show_page_service, schema=SHOW_PAGE_SCHEMA)
+
+    for _svc, _handler, _schema in (
+        (SERVICE_SET_ORIENTATION, _handle_set_orientation, SET_ORIENTATION_SCHEMA),
+        (SERVICE_SET_FUN_MODE, _handle_set_fun_mode, SET_FUN_MODE_SCHEMA),
+        (SERVICE_SHOW_IMAGE, _handle_show_image, SHOW_IMAGE_SCHEMA),
+        (SERVICE_SHOW_SLOT, _handle_show_slot, SHOW_SLOT_SCHEMA),
+        (SERVICE_DELETE_SLOT, _handle_delete_slot, DELETE_SLOT_SCHEMA),
+    ):
+        if not hass.services.has_service(DOMAIN, _svc):
+            def _make(handler):
+                async def _svc_fn(call: ServiceCall) -> None:
+                    await handler(hass, call)
+                return _svc_fn
+            hass.services.async_register(DOMAIN, _svc, _make(_handler), schema=_schema)
 
     # Reload the entry when its options (e.g. panel dimensions) change.
     entry.async_on_unload(entry.add_update_listener(async_reload_entry))

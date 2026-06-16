@@ -9,9 +9,9 @@ const ANCHORS = [
   "center_left", "center", "center_right",
   "bottom_left", "bottom_center", "bottom_right",
 ];
-const FONTS = ["WP7xn", "7x5", "5x5", "3x5-de", "OpenSans-Light"];
+const FONTS = ["Tiny5", "WP7xn", "PixelifySans", "7x5", "5x5", "PressStart2P", "3x5-de", "OpenSans-Light"];
 // Readable native sizes per pixel font (used as smart defaults).
-const FONT_SIZES = { WP7xn: 7, "7x5": 7, "5x5": 10, "3x5-de": 8, "OpenSans-Light": 9 };
+const FONT_SIZES = { Tiny5: 8, WP7xn: 7, PixelifySans: 10, "7x5": 7, "5x5": 10, PressStart2P: 6, "3x5-de": 8, "OpenSans-Light": 9 };
 
 // Which editable fields each widget type exposes, beyond the common ones.
 const WIDGET_FIELDS = {
@@ -32,9 +32,9 @@ const EXAMPLES = {
   "Battery bar": {
     background: "000000",
     widgets: [
-      { type: "text", anchor: "top_center", color: "ffffff", font: "WP7xn", size: 7,
+      { type: "text", anchor: "top_center", color: "ffffff", font: "Tiny5", size: 8,
         text: "Battery", dy: 1 },
-      { type: "text", anchor: "center", font: "WP7xn", size: 7,
+      { type: "text", anchor: "center", font: "Tiny5", size: 8,
         text: "{{ states('sensor.battery') }}%",
         color: "{{ '00cc33' if states('sensor.battery')|int(0) > 30 else 'ff3333' }}" },
       { type: "progress", anchor: "bottom_center", width: 30, height: 5, dy: -1,
@@ -46,18 +46,18 @@ const EXAMPLES = {
     background: "000000",
     widgets: [
       { type: "emoji", anchor: "top_left", size: 14, dx: 1, dy: 1, emoji: "🌡️" },
-      { type: "text", anchor: "top_right", color: "ffaa00", font: "WP7xn", size: 7, dx: -1, dy: 2,
+      { type: "text", anchor: "top_right", color: "ffaa00", font: "Tiny5", size: 8, dx: -1, dy: 2,
         text: "{{ states('sensor.outdoor_temperature') }}°" },
       { type: "line", x: 0, y: 17, x2: 31, y2: 17, color: "2d2d2d" },
-      { type: "clock", anchor: "bottom_center", color: "bebebe", font: "WP7xn", size: 7, dy: -1, format: "%H:%M" },
+      { type: "clock", anchor: "bottom_center", color: "bebebe", font: "Tiny5", size: 8, dy: -1, format: "%H:%M" },
     ],
   },
   "Two sensors": {
     background: "000000",
     widgets: [
-      { type: "text", anchor: "top_left", color: "00ccdd", font: "WP7xn", size: 7, dx: 1, dy: 1,
+      { type: "text", anchor: "top_left", color: "00ccdd", font: "Tiny5", size: 8, dx: 1, dy: 1,
         text: "{{ states('sensor.living_room_temperature') }}C" },
-      { type: "text", anchor: "bottom_left", color: "88ff00", font: "WP7xn", size: 7, dx: 1, dy: -1,
+      { type: "text", anchor: "bottom_left", color: "88ff00", font: "Tiny5", size: 8, dx: 1, dy: -1,
         text: "{{ states('sensor.humidity') }}%" },
     ],
   },
@@ -66,7 +66,7 @@ const EXAMPLES = {
     widgets: [
       { type: "emoji", anchor: "center", size: 18, emoji: "🚪",
         if: "{{ is_state('binary_sensor.front_door', 'on') }}" },
-      { type: "text", anchor: "center", color: "888888", font: "WP7xn", size: 7,
+      { type: "text", anchor: "center", color: "888888", font: "Tiny5", size: 8,
         text: "OK", if: "{{ is_state('binary_sensor.front_door', 'off') }}" },
     ],
   },
@@ -321,9 +321,9 @@ class IPixelCard extends HTMLElement {
 
   _defaultWidget(type) {
     const w = { type, anchor: "center", color: "ffffff" };
-    if (type === "text") { w.text = "Hello"; w.font = "WP7xn"; w.size = 7; }
+    if (type === "text") { w.text = "Hello"; w.font = "Tiny5"; w.size = 8; }
     if (type === "emoji") { w.emoji = "⭐"; w.size = 12; }
-    if (type === "clock") { w.format = "%H:%M"; w.font = "WP7xn"; w.size = 7; }
+    if (type === "clock") { w.format = "%H:%M"; w.font = "Tiny5"; w.size = 8; }
     if (type === "line") { delete w.anchor; w.x = 0; w.y = 16; w.x2 = 31; w.y2 = 16; w.color = "888888"; }
     if (type === "rect") { w.width = 8; w.height = 8; w.fill = true; }
     if (type === "progress") { w.value = "50"; w.width = 30; w.height = 4; w.color = "00cc33"; }

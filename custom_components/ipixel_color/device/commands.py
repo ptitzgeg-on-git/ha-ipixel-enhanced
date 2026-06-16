@@ -35,10 +35,33 @@ def make_brightness_command(brightness: int) -> bytes:
 def make_command_payload(opcode: int, payload: bytes) -> bytes:
     """Create command with header (following ipixel-ctrl/common.py format)."""
     total_length = len(payload) + 4  # +4 for length and opcode
-    
+
     command = bytearray()
     command.extend(total_length.to_bytes(2, 'little'))  # Length (little-endian)
     command.extend(opcode.to_bytes(2, 'little'))        # Opcode (little-endian)
     command.extend(payload)                             # Payload data
-    
+
     return bytes(command)
+
+
+# --- Thin wrappers over pypixelcolor command builders ---------------------
+# Each builder returns a SendPlan; we take the single window's raw bytes.
+def make_orientation_command(orientation: int) -> bytes:
+    """0=0°, 1=90°, 2=180°, 3=270°."""
+    from pypixelcolor.commands.set_orientation import set_orientation
+    return set_orientation(int(orientation)).windows[0].data
+
+
+def make_fun_mode_command(enable: bool) -> bytes:
+    from pypixelcolor.commands.set_fun_mode import set_fun_mode
+    return set_fun_mode(bool(enable)).windows[0].data
+
+
+def make_show_slot_command(number: int) -> bytes:
+    from pypixelcolor.commands.show_slot import show_slot
+    return show_slot(int(number)).windows[0].data
+
+
+def make_delete_slot_command(number: int) -> bytes:
+    from pypixelcolor.commands.delete import delete
+    return delete(int(number)).windows[0].data

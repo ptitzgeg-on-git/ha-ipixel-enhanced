@@ -76,9 +76,24 @@ playlist target all let you address a specific panel.
 
 | Service | Purpose |
 |---|---|
-| `ipixel_color.show_page` | Render a saved page (`name`) or an inline `page` and push it to a device. Great for automations. |
+| `ipixel_color.show_page` | Render a saved page (`name`) or an inline `page` and push it to a device. Optional `save_slot` stores it on the device. |
 | `ipixel_color.show_text` | Quick scrolling text. |
 | `ipixel_color.show_emoji` | Show a single emoji. |
+| `ipixel_color.show_image` | Send an image or **animated GIF** (URL or `/local/...`). GIFs play natively. |
+| `ipixel_color.set_orientation` | Rotate the display (0/90/180/270°). Also an **Orientation** select entity. |
+| `ipixel_color.set_fun_mode` | Toggle the panel's built-in effect mode. Also a **Fun Mode** switch. |
+| `ipixel_color.show_slot` / `delete_slot` | Recall / delete a program stored in device memory. |
+
+### Extra entities
+
+Each display also exposes an **Orientation** select and a **Fun Mode** switch,
+on top of power, brightness, clock style, font, etc.
+
+### Fonts
+
+Bundled pixel fonts render crisp on the matrix: **Tiny5** (default, most
+readable), WP7xn, PixelifySans, 7x5, 5x5, PressStart2P (retro, wide), plus
+OpenSans-Light. Color emoji are drawn with the `emoji` widget.
 
 Example automation:
 

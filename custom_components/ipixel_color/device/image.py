@@ -15,7 +15,8 @@ def make_image_command(
     image_bytes: bytes,
     file_extension: str = ".png",
     resize_method: str = "crop",
-    device_info_dict: Optional[dict] = None
+    device_info_dict: Optional[dict] = None,
+    save_slot: int = 0,
 ) -> list[bytes]:
     """Build image display command using pypixelcolor.
 
@@ -59,7 +60,8 @@ def make_image_command(
         hex_string=hex_string,
         file_extension=file_extension,
         resize_method=resize_method,
-        device_info=device_info
+        device_info=device_info,
+        save_slot=save_slot,
     )
 
     # Extract command bytes from all windows

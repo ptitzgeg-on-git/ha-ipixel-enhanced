@@ -31,6 +31,8 @@ class iPIXELAPI:
         self._entry = entry
         self._bluetooth = BluetoothClient(hass, address)
         self._power_state = False
+        self._orientation = 0
+        self._fun_mode = False
         self._device_info: dict[str, Any] | None = None
         self._device_response: bytes | None = None
 
@@ -230,8 +232,12 @@ class iPIXELAPI:
         _LOGGER.info("Image [%s] displayed — %d bytes OK", label, total_bytes)
         return True
 
-    async def display_widgets(self, page: dict) -> bool:
-        """Render a widget page (the generic engine) and push it to the device."""
+    async def display_widgets(self, page: dict, save_slot: int = 0) -> bool:
+        """Render a widget page (the generic engine) and push it to the device.
+
+        save_slot >= 1 also stores the page in the device's memory so it can be
+        recalled later with show_slot() without Home Assistant.
+        """
         try:
             device_info = await self.get_device_info()
             png_data = await render_page_to_png(
@@ -240,10 +246,68 @@ class iPIXELAPI:
             commands = make_image_command(
                 image_bytes=png_data, file_extension=".png",
                 resize_method="crop", device_info_dict=device_info,
+                save_slot=save_slot,
             )
-            return await self._send_image_commands(commands, "page")
+            return await self._send_image_commands(commands, f"page(slot={save_slot})")
         except Exception as err:  # noqa: BLE001
             _LOGGER.exception("Error displaying widget page: %s", err)
+            return False
+
+    async def display_image_file(self, data: bytes, file_extension: str = ".gif", save_slot: int = 0) -> bool:
+        """Send a raw image/GIF file as-is. Animated GIFs play natively on the
+        panel (pypixelcolor uploads every frame)."""
+        try:
+            device_info = await self.get_device_info()
+            commands = make_image_command(
+                image_bytes=data, file_extension=file_extension,
+                resize_method="crop", device_info_dict=device_info,
+                save_slot=save_slot,
+            )
+            return await self._send_image_commands(commands, f"file{file_extension}(slot={save_slot})")
+        except Exception as err:  # noqa: BLE001
+            _LOGGER.exception("Error sending image file: %s", err)
+            return False
+
+    async def set_orientation(self, orientation: int) -> bool:
+        """Rotate the display: 0=0°, 1=90°, 2=180°, 3=270°."""
+        from .device.commands import make_orientation_command
+        try:
+            ok = await self._bluetooth.send_command(make_orientation_command(orientation))
+            if ok:
+                self._orientation = int(orientation)
+            return ok
+        except Exception as err:  # noqa: BLE001
+            _LOGGER.error("Error setting orientation: %s", err)
+            return False
+
+    async def set_fun_mode(self, enable: bool) -> bool:
+        """Toggle the panel's built-in 'fun' effect mode."""
+        from .device.commands import make_fun_mode_command
+        try:
+            ok = await self._bluetooth.send_command(make_fun_mode_command(enable))
+            if ok:
+                self._fun_mode = bool(enable)
+            return ok
+        except Exception as err:  # noqa: BLE001
+            _LOGGER.error("Error setting fun mode: %s", err)
+            return False
+
+    async def show_slot(self, number: int) -> bool:
+        """Recall a stored program slot on the device."""
+        from .device.commands import make_show_slot_command
+        try:
+            return await self._bluetooth.send_command(make_show_slot_command(number))
+        except Exception as err:  # noqa: BLE001
+            _LOGGER.error("Error showing slot %s: %s", number, err)
+            return False
+
+    async def delete_slot(self, number: int) -> bool:
+        """Delete a stored program slot on the device."""
+        from .device.commands import make_delete_slot_command
+        try:
+            return await self._bluetooth.send_command(make_delete_slot_command(number))
+        except Exception as err:  # noqa: BLE001
+            _LOGGER.error("Error deleting slot %s: %s", number, err)
             return False
 
     async def display_emoji(self, emoji: str, bg_color: str = "000000", width_override: int | None = None, height_override: int | None = None) -> bool:
@@ -274,6 +338,14 @@ class iPIXELAPI:
     @property
     def power_state(self) -> bool:
         return self._power_state
+
+    @property
+    def orientation(self) -> int:
+        return self._orientation
+
+    @property
+    def fun_mode(self) -> bool:
+        return self._fun_mode
 
     @property
     def address(self) -> str:

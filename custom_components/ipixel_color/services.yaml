@@ -79,3 +79,102 @@ show_page:
         "anchor": "center", "color": "ffaa00"}]}
       selector:
         object:
+    save_slot:
+      name: Save to slot
+      description: 1-255 also stores the page in device memory (recall with Show slot). 0 = don't save.
+      required: false
+      default: 0
+      selector:
+        number:
+          min: 0
+          max: 255
+          mode: box
+
+set_orientation:
+  name: Set orientation
+  description: Rotate the display (hardware orientation, affects all modes).
+  target:
+    device:
+      integration: ipixel_color
+  fields:
+    orientation:
+      name: Orientation
+      description: 0=0°, 1=90°, 2=180°, 3=270°
+      required: true
+      selector:
+        number:
+          min: 0
+          max: 3
+          mode: slider
+
+set_fun_mode:
+  name: Set fun mode
+  description: Toggle the panel's built-in 'fun' effect mode.
+  target:
+    device:
+      integration: ipixel_color
+  fields:
+    enable:
+      name: Enable
+      required: true
+      selector:
+        boolean:
+
+show_image:
+  name: Show image / GIF
+  description: >-
+    Send an image or animated GIF to the panel. Animated GIFs play natively.
+    Source can be an http(s) URL or a local path (/local/... = your config/www).
+  target:
+    device:
+      integration: ipixel_color
+  fields:
+    source:
+      name: Source
+      description: URL or local path to a PNG/JPG/GIF
+      required: true
+      example: /local/cat.gif
+      selector:
+        text:
+    save_slot:
+      name: Save to slot
+      description: 1-255 stores it in device memory. 0 = don't save.
+      required: false
+      default: 0
+      selector:
+        number:
+          min: 0
+          max: 255
+          mode: box
+
+show_slot:
+  name: Show slot
+  description: Recall a program stored in the device's memory (no Home Assistant needed afterwards).
+  target:
+    device:
+      integration: ipixel_color
+  fields:
+    slot:
+      name: Slot
+      required: true
+      selector:
+        number:
+          min: 0
+          max: 255
+          mode: box
+
+delete_slot:
+  name: Delete slot
+  description: Delete a stored program slot on the device.
+  target:
+    device:
+      integration: ipixel_color
+  fields:
+    slot:
+      name: Slot
+      required: true
+      selector:
+        number:
+          min: 0
+          max: 255
+          mode: box

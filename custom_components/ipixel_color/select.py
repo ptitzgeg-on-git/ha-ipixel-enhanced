@@ -37,7 +37,53 @@ async def async_setup_entry(
         iPIXELFontSelect(hass, api, entry, address, name),
         iPIXELModeSelect(hass, api, entry, address, name),
         iPIXELClockStyleSelect(hass, api, entry, address, name),
+        iPIXELOrientationSelect(api, entry, address, name),
     ])
+
+
+ORIENTATION_OPTIONS = {"0°": 0, "90°": 1, "180°": 2, "270°": 3}
+
+
+class iPIXELOrientationSelect(SelectEntity, RestoreEntity):
+    """Rotate the display (hardware orientation, affects all modes)."""
+
+    _attr_icon = "mdi:screen-rotation"
+
+    def __init__(self, api: iPIXELAPI, entry: ConfigEntry, address: str, name: str) -> None:
+        self._api = api
+        self._entry = entry
+        self._address = address
+        self._name = name
+        self._attr_name = "Orientation"
+        self._attr_unique_id = f"{address}_orientation"
+        self._attr_options = list(ORIENTATION_OPTIONS.keys())
+        self._attr_current_option = "0°"
+        self._attr_device_info = DeviceInfo(
+            identifiers={(DOMAIN, address)},
+            name=name,
+            manufacturer="iPIXEL",
+            model="LED Matrix Display",
+            sw_version="1.0",
+        )
+
+    async def async_added_to_hass(self) -> None:
+        await super().async_added_to_hass()
+        last_state = await self.async_get_last_state()
+        if last_state is not None and last_state.state in ORIENTATION_OPTIONS:
+            self._attr_current_option = last_state.state
+
+    @property
+    def available(self) -> bool:
+        return True
+
+    async def async_select_option(self, option: str) -> None:
+        if option not in ORIENTATION_OPTIONS:
+            return
+        if not self._api.is_connected:
+            await self._api.connect()
+        if await self._api.set_orientation(ORIENTATION_OPTIONS[option]):
+            self._attr_current_option = option
+            self.async_write_ha_state()
 
 
 class iPIXELFontSelect(SelectEntity, RestoreEntity):

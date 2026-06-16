@@ -47,26 +47,31 @@ If your panel reports the wrong size, override it in
 | setTime / device info | Sync clock, read params | ✅ (auto on connect) |
 | getFirmwareVersions | Firmware query | ✅ (logged) |
 | showText | Text + animation/color/rainbow/font | ✅ `show_text`, designer |
-| showImage | Image/GIF transfer (chunked, CRC) | ✅ images via designer `image` widget / engine |
+| showImage | Image/GIF transfer (chunked, CRC) | ✅ `show_image` service (animated GIF native) + designer `image` widget |
 | showClock | Native clock styles, calendar, 12/24h | ✅ `select` clock style |
 | showPixel | Set individual pixels (RGB) | ⚙️ via rendered pages (engine draws pixels) |
-| setRotation | Display orientation (0/90/180/270) | ⏳ not yet exposed |
+| setRotation | Display orientation (0/90/180/270) | ✅ `Orientation` select + `set_orientation` service |
 | setSpeed | Animation speed | ✅ in `show_text` |
-| setFunMode | Built-in effect mode | ⏳ not yet exposed |
+| setFunMode | Built-in effect mode | ✅ `Fun Mode` switch + `set_fun_mode` service |
 | showRhythmLevels / showRhythmAnimation | Audio-reactive visualizations | ⏳ not yet exposed |
-| setProgramList / delProgramList / deleteSlot | Save/recall stored programs | ⏳ not yet exposed |
+| setProgramList / showSlot / deleteSlot | Save/recall stored programs | ✅ `save_slot` on show_page/show_image + `show_slot`/`delete_slot` services |
 | clear | Blank the display | ⚙️ (send an all-black page) |
 
 ✅ available · ⚙️ achievable via the page engine · ⏳ candidate for a future
 service/entity.
 
-## Ideas to "use 100%" of the panel
+## Program slots (persist without Home Assistant)
 
-- **Rotation** entity (`select`: 0/90/180/270) — small addition.
-- **Fun mode** select to trigger the firmware's built-in effects.
-- **Native GIF**: `showImage` already supports GIF frames over BLE; the engine
-  currently sends a single rendered frame. Multi-frame upload could animate.
-- **Program slots**: store pages on the device so they persist without HA.
+`show_page`/`show_image` accept `save_slot: 1-255`, which both displays the
+content **and** stores it in the panel's memory. Later, `show_slot: N` recalls
+it directly on the device — useful so the panel keeps showing something even if
+Home Assistant is off. `delete_slot: N` clears a slot.
 
-If you want any of these wired up, open an issue — the protocol hooks above map
-directly onto pypixelcolor's command builders.
+## Still on the table
+
+- **Rhythm / audio-reactive** modes (`set_rhythm_mode`) — pypixelcolor exposes
+  the builders; would need an audio level source in HA.
+- **Native multi-frame animations** authored frame-by-frame (beyond GIF upload).
+
+The protocol hooks above map directly onto pypixelcolor's command builders
+(`set_orientation`, `set_fun_mode`, `show_slot`, `delete`, `send_image_hex`).
