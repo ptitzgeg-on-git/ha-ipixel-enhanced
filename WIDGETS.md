@@ -40,6 +40,61 @@ one of two ways:
 
 ---
 
+## Live Home Assistant data (dynamic content)
+
+This is the key to custom dashboards: **every field is a Jinja2 template**, so
+you bind any entity, attribute or API-backed sensor directly. A few patterns:
+
+**Progress bar driven by a sensor:**
+```yaml
+- type: progress
+  anchor: bottom_center
+  width: 30
+  height: 5
+  value: "{{ states('sensor.battery') }}"
+  color: "{{ '00cc33' if states('sensor.battery')|int(0) > 30 else 'ff3333' }}"
+```
+
+**Text from any sensor (incl. REST/API sensors you create in HA):**
+```yaml
+- type: text
+  text: "{{ states('sensor.my_rest_api') }}"
+  anchor: center
+  font: WP7xn
+```
+
+**Show/hide a widget on a condition** (`if`):
+```yaml
+- type: emoji
+  emoji: "🔔"
+  anchor: center
+  if: "{{ is_state('binary_sensor.doorbell', 'on') }}"
+```
+
+**Attributes & math:**
+```yaml
+- type: text
+  text: "{{ state_attr('weather.home','temperature')|round }}°"
+```
+
+For data from an external API: create a [REST sensor](https://www.home-assistant.io/integrations/rest/)
+(or any integration) in Home Assistant, then reference `states('sensor.xxx')`
+here. The display refreshes when you press **Send now**, when the **playlist**
+re-renders the page, or when you call the `ipixel_color.show_page` service from
+an automation (e.g. on a `time_pattern` trigger every minute).
+
+> The card ships **starter examples** (Battery bar, Temperature, Two sensors,
+> Alert) — pick one from the *Examples* dropdown and swap in your entity names.
+
+### Fonts
+
+Pixel fonts render crisp 1-bit by default. Readable native sizes:
+`WP7xn`→7, `7x5`→7, `5x5`→10, `3x5-de`→8. Add `antialias: true` only for large
+text where smooth edges help. (Color emoji are drawn with the `emoji` widget,
+not by selecting a font.)
+
+---
+
 ## Widget types
 
 ### `text`

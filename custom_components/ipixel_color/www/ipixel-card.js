@@ -9,7 +9,9 @@ const ANCHORS = [
   "center_left", "center", "center_right",
   "bottom_left", "bottom_center", "bottom_right",
 ];
-const FONTS = ["5x5", "7x5", "3x5-de", "WP7xn", "OpenSans-Light"];
+const FONTS = ["WP7xn", "7x5", "5x5", "3x5-de", "OpenSans-Light"];
+// Readable native sizes per pixel font (used as smart defaults).
+const FONT_SIZES = { WP7xn: 7, "7x5": 7, "5x5": 10, "3x5-de": 8, "OpenSans-Light": 9 };
 
 // Which editable fields each widget type exposes, beyond the common ones.
 const WIDGET_FIELDS = {
@@ -23,6 +25,52 @@ const WIDGET_FIELDS = {
 };
 const WIDGET_TYPES = Object.keys(WIDGET_FIELDS);
 const POSITIONLESS = new Set(["line"]); // uses x/y directly
+
+// Ready-made pages showing how to bind live Home Assistant data via templates.
+// Replace the sensor names with your own entities.
+const EXAMPLES = {
+  "Battery bar": {
+    background: "000000",
+    widgets: [
+      { type: "text", anchor: "top_center", color: "ffffff", font: "WP7xn", size: 7,
+        text: "Battery", dy: 1 },
+      { type: "text", anchor: "center", font: "WP7xn", size: 7,
+        text: "{{ states('sensor.battery') }}%",
+        color: "{{ '00cc33' if states('sensor.battery')|int(0) > 30 else 'ff3333' }}" },
+      { type: "progress", anchor: "bottom_center", width: 30, height: 5, dy: -1,
+        value: "{{ states('sensor.battery') }}",
+        color: "{{ '00cc33' if states('sensor.battery')|int(0) > 30 else 'ff3333' }}" },
+    ],
+  },
+  "Temperature + emoji": {
+    background: "000000",
+    widgets: [
+      { type: "emoji", anchor: "top_left", size: 14, dx: 1, dy: 1, emoji: "🌡️" },
+      { type: "text", anchor: "top_right", color: "ffaa00", font: "WP7xn", size: 7, dx: -1, dy: 2,
+        text: "{{ states('sensor.outdoor_temperature') }}°" },
+      { type: "line", x: 0, y: 17, x2: 31, y2: 17, color: "2d2d2d" },
+      { type: "clock", anchor: "bottom_center", color: "bebebe", font: "WP7xn", size: 7, dy: -1, format: "%H:%M" },
+    ],
+  },
+  "Two sensors": {
+    background: "000000",
+    widgets: [
+      { type: "text", anchor: "top_left", color: "00ccdd", font: "WP7xn", size: 7, dx: 1, dy: 1,
+        text: "{{ states('sensor.living_room_temperature') }}C" },
+      { type: "text", anchor: "bottom_left", color: "88ff00", font: "WP7xn", size: 7, dx: 1, dy: -1,
+        text: "{{ states('sensor.humidity') }}%" },
+    ],
+  },
+  "Alert when on": {
+    background: "000000",
+    widgets: [
+      { type: "emoji", anchor: "center", size: 18, emoji: "🚪",
+        if: "{{ is_state('binary_sensor.front_door', 'on') }}" },
+      { type: "text", anchor: "center", color: "888888", font: "WP7xn", size: 7,
+        text: "OK", if: "{{ is_state('binary_sensor.front_door', 'off') }}" },
+    ],
+  },
+};
 
 function el(tag, attrs = {}, children = []) {
   const n = document.createElement(tag);
@@ -132,6 +180,11 @@ class IPixelCard extends HTMLElement {
       this._librarySel,
       el("button", { class: "ipx-btn", onclick: () => this._deletePage() }, "Delete"),
     ])));
+
+    const exampleSel = el("select", { class: "ipx-input", onchange: (e) => this._loadExample(e.target.value) });
+    exampleSel.appendChild(el("option", { value: "" }, "— starter examples —"));
+    Object.keys(EXAMPLES).forEach((n) => exampleSel.appendChild(el("option", { value: n }, n)));
+    right.appendChild(this._labeled("Examples (edit the entity names!)", exampleSel));
 
     top.appendChild(this._img);
     top.appendChild(right);
@@ -257,9 +310,9 @@ class IPixelCard extends HTMLElement {
 
   _defaultWidget(type) {
     const w = { type, anchor: "center", color: "ffffff" };
-    if (type === "text") { w.text = "Hello"; w.font = "5x5"; w.size = 5; }
+    if (type === "text") { w.text = "Hello"; w.font = "WP7xn"; w.size = 7; }
     if (type === "emoji") { w.emoji = "⭐"; w.size = 12; }
-    if (type === "clock") { w.format = "%H:%M"; w.font = "5x5"; w.size = 5; }
+    if (type === "clock") { w.format = "%H:%M"; w.font = "WP7xn"; w.size = 7; }
     if (type === "line") { delete w.anchor; w.x = 0; w.y = 16; w.x2 = 31; w.y2 = 16; w.color = "888888"; }
     if (type === "rect") { w.width = 8; w.height = 8; w.fill = true; }
     if (type === "progress") { w.value = "50"; w.width = 30; w.height = 4; w.color = "00cc33"; }
@@ -327,7 +380,11 @@ class IPixelCard extends HTMLElement {
     } else if (kind === "font") {
       input = el("select", { class: "ipx-input" });
       FONTS.forEach((f) => input.appendChild(el("option", { value: f, ...(w[key] === f ? { selected: "" } : {}) }, f)));
-      input.addEventListener("change", () => { w[key] = input.value; this._schedulePreview(); });
+      input.addEventListener("change", () => {
+        w[key] = input.value;
+        if (FONT_SIZES[input.value]) w.size = FONT_SIZES[input.value];  // snap to a readable size
+        this._renderEditor(); this._schedulePreview();
+      });
     } else if (kind === "fit") {
       input = el("select", { class: "ipx-input" });
       ["contain", "cover", "stretch"].forEach((f) => input.appendChild(el("option", { value: f, ...(w[key] === f ? { selected: "" } : {}) }, f)));
@@ -361,6 +418,16 @@ class IPixelCard extends HTMLElement {
       this._refreshLibraryList();
       this._status(`Saved “${name}”.`);
     } catch (e) { this._status("Save failed: " + e, true); }
+  }
+
+  _loadExample(name) {
+    if (!name || !EXAMPLES[name]) return;
+    this._page = JSON.parse(JSON.stringify(EXAMPLES[name]));
+    this._codeText = null;
+    this._mode = "visual";
+    this._renderEditor();
+    this._schedulePreview();
+    this._status(`Loaded example “${name}” — change the entity names to yours.`);
   }
 
   _loadPage(name) {

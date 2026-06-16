@@ -42,8 +42,8 @@ from .emoji_renderer import fetch_emoji_png
 
 _LOGGER = logging.getLogger(__name__)
 
-DEFAULT_FONT = "5x5"
-DEFAULT_FONT_SIZE = 5
+DEFAULT_FONT = "WP7xn"
+DEFAULT_FONT_SIZE = 7
 EMOJI_DOWNLOAD_TIMEOUT = 10
 
 ANCHORS = {
@@ -253,10 +253,17 @@ def _draw_text(canvas, draw, w, cw, ch):
     spacing = int(w.get("spacing", 1) or 0)
     align = str(w.get("align", "left")).lower()
     color = parse_color(w.get("color", "ffffff"), (255, 255, 255))
-    tw, th, ox, oy = _text_size(font, text, spacing)
-    px, py = _resolve_position(w, tw, th, cw, ch)
-    draw.multiline_text((px - ox, py - oy), text, font=font, fill=color,
-                        spacing=spacing, align=align)
+    # Crisp 1-bit glyphs by default (LED matrices can't show anti-aliased grays);
+    # set "antialias": true for smooth edges on larger text.
+    prev_mode = draw.fontmode
+    draw.fontmode = "L" if _truthy(w.get("antialias", False)) else "1"
+    try:
+        tw, th, ox, oy = _text_size(font, text, spacing)
+        px, py = _resolve_position(w, tw, th, cw, ch)
+        draw.multiline_text((px - ox, py - oy), text, font=font, fill=color,
+                            spacing=spacing, align=align)
+    finally:
+        draw.fontmode = prev_mode
 
 
 def _draw_emoji(canvas, draw, w, asset, cw, ch):
