@@ -89,6 +89,22 @@ SET_PLAYLIST_SCHEMA = vol.Schema({
     vol.Optional("device_id"): vol.Any(None, str, [str]),
 })
 
+SERVICE_SET_PROGRAM = "set_program"
+SET_PROGRAM_SCHEMA = vol.Schema({
+    vol.Optional("device_id"): vol.Any(None, str, [str]),
+    vol.Required("slots"): vol.All(
+        [vol.All(int, vol.Range(min=0, max=255))], vol.Length(min=1, max=64)
+    ),
+})
+
+SERVICE_SET_PIXEL = "set_pixel"
+SET_PIXEL_SCHEMA = vol.Schema({
+    vol.Optional("device_id"): vol.Any(None, str, [str]),
+    vol.Required("x"): vol.All(int, vol.Range(min=0, max=255)),
+    vol.Required("y"): vol.All(int, vol.Range(min=0, max=255)),
+    vol.Optional("color", default="ffffff"): str,
+})
+
 SERVICE_SHOW_TEXT = "show_text"
 SHOW_TEXT_SCHEMA = vol.Schema({
     vol.Required("text"): str,
@@ -215,6 +231,16 @@ async def _handle_set_playlist(hass: HomeAssistant, call: ServiceCall) -> None:
         runner.restart()
 
 
+async def _handle_set_program(hass: HomeAssistant, call: ServiceCall) -> None:
+    await _resolve_api(hass, call).set_program(call.data["slots"])
+
+
+async def _handle_set_pixel(hass: HomeAssistant, call: ServiceCall) -> None:
+    api = _resolve_api(hass, call)
+    color = call.data.get("color", "ffffff").lstrip("#")
+    await api.set_pixel(call.data["x"], call.data["y"], color)
+
+
 async def _handle_show_image(hass: HomeAssistant, call: ServiceCall) -> None:
     from .display.widget_renderer import _read_local_image, _fetch_remote_image
     api = _resolve_api(hass, call)
@@ -328,6 +354,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         (SERVICE_RHYTHM_ANIMATION, _handle_rhythm_animation, RHYTHM_ANIMATION_SCHEMA),
         (SERVICE_RHYTHM_LEVELS, _handle_rhythm_levels, RHYTHM_LEVELS_SCHEMA),
         (SERVICE_SET_PLAYLIST, _handle_set_playlist, SET_PLAYLIST_SCHEMA),
+        (SERVICE_SET_PROGRAM, _handle_set_program, SET_PROGRAM_SCHEMA),
+        (SERVICE_SET_PIXEL, _handle_set_pixel, SET_PIXEL_SCHEMA),
     ):
         if not hass.services.has_service(DOMAIN, _svc):
             def _make(handler):

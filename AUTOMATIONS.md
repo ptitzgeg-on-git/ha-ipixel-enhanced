@@ -117,6 +117,24 @@ automation:
   data: { slot: 1 }
 ```
 
+### Native animation: let the panel cycle slots by itself
+This is the box's "animation" feature. Save a few pages/images to device slots,
+then start the device-side rotation — it keeps running with **no Home Assistant
+and no Bluetooth**:
+```yaml
+# 1) store a few screens (once)
+- service: ipixel_color.show_page
+  target: { device_id: <your_device> }
+  data: { name: weather, save_slot: 1 }
+- service: ipixel_color.show_image
+  target: { device_id: <your_device> }
+  data: { source: /local/cat.gif, save_slot: 2 }
+# 2) tell the panel to auto-cycle them
+- service: ipixel_color.set_program
+  target: { device_id: <your_device> }
+  data: { slots: [1, 2] }
+```
+
 ### Audio-reactive bars (advanced)
 The panel does **not** analyse audio itself — you feed it 11 levels (0-15),
 typically from an audio-analysis sensor, and call the service repeatedly:

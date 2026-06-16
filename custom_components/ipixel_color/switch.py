@@ -263,16 +263,21 @@ class iPIXELAutoUpdateSwitch(SwitchEntity, RestoreEntity):
 
 
 class iPIXELFunModeSwitch(SwitchEntity):
-    """Toggle the panel's built-in 'fun' effect mode."""
+    """Enable the panel's DIY/draw mode.
 
-    _attr_icon = "mdi:party-popper"
+    Turning this on clears the screen to a blank canvas; you then light pixels
+    with the ipixel_color.set_pixel service. (This is the device's 'fun'/DIY
+    drawing mode — a black screen when enabled is expected.)
+    """
+
+    _attr_icon = "mdi:draw"
 
     def __init__(self, api: iPIXELAPI, entry: ConfigEntry, address: str, name: str) -> None:
         self._api = api
         self._entry = entry
         self._address = address
         self._name = name
-        self._attr_name = "Fun Mode"
+        self._attr_name = "DIY Draw Mode"
         self._attr_unique_id = f"{address}_fun_mode"
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, address)},

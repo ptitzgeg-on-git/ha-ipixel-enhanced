@@ -317,6 +317,24 @@ class iPIXELAPI:
             _LOGGER.error("Error setting rhythm levels: %s", err)
             return False
 
+    async def set_pixel(self, x: int, y: int, color: str) -> bool:
+        """Light one pixel (enable DIY/fun mode first). color = 'RRGGBB'."""
+        from .device.commands import make_set_pixel_command
+        try:
+            return await self._bluetooth.send_command(make_set_pixel_command(x, y, color))
+        except Exception as err:  # noqa: BLE001
+            _LOGGER.error("Error setting pixel: %s", err)
+            return False
+
+    async def set_program(self, slots: list[int]) -> bool:
+        """Native animation: device auto-cycles the given stored slots by itself."""
+        from .device.commands import make_program_command
+        try:
+            return await self._bluetooth.send_command(make_program_command(slots))
+        except Exception as err:  # noqa: BLE001
+            _LOGGER.error("Error setting program: %s", err)
+            return False
+
     async def show_slot(self, number: int) -> bool:
         """Recall a stored program slot on the device."""
         from .device.commands import make_show_slot_command

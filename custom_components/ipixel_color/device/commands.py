@@ -78,3 +78,18 @@ def make_rhythm_levels_command(style: int, levels: list[int]) -> bytes:
     from pypixelcolor.commands.set_rhythm_mode import set_rhythm_mode
     lv = (list(levels) + [0] * 11)[:11]
     return set_rhythm_mode(int(style), *[int(x) for x in lv]).windows[0].data
+
+
+def make_set_pixel_command(x: int, y: int, color: str) -> bytes:
+    """Light one pixel (requires DIY/fun mode enabled first). color = 'RRGGBB'."""
+    from pypixelcolor.commands.set_fun_mode import set_pixel
+    return set_pixel(int(x), int(y), color).windows[0].data
+
+
+def make_program_command(slots: list[int]) -> bytes:
+    """Native animation: tell the device to auto-cycle these stored slots
+    (command 0x8008). The panel rotates them by itself, no Home Assistant."""
+    s = [int(n) & 0xFF for n in slots] or [0]
+    n = len(s)
+    total = 6 + n
+    return bytes([total & 0xFF, total >> 8, 0x08, 0x80, n & 0xFF, n >> 8] + s)

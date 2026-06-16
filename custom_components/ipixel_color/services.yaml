@@ -240,3 +240,45 @@ set_playlist:
       selector:
         device:
           integration: ipixel_color
+
+set_program:
+  name: Native animation (cycle slots)
+  description: >-
+    Tell the panel to auto-cycle stored slots by itself (the box's "animation"
+    feature). Save pages/images to slots first with save_slot, then list them
+    here. Runs on the device with no Home Assistant or Bluetooth needed.
+  target:
+    device:
+      integration: ipixel_color
+  fields:
+    slots:
+      name: Slots
+      description: List of slot numbers to rotate, e.g. [1, 2, 3]
+      required: true
+      example: "[1, 2, 3]"
+      selector:
+        object:
+
+set_pixel:
+  name: Draw pixel (DIY mode)
+  description: >-
+    Light a single pixel. Enable "DIY Draw Mode" first (the screen goes blank,
+    then you draw). color is a hex string like ff0000.
+  target:
+    device:
+      integration: ipixel_color
+  fields:
+    x:
+      name: X
+      required: true
+      selector: { number: { min: 0, max: 63, mode: box } }
+    y:
+      name: Y
+      required: true
+      selector: { number: { min: 0, max: 63, mode: box } }
+    color:
+      name: Color (hex)
+      required: false
+      default: ffffff
+      example: ff0000
+      selector: { text: }

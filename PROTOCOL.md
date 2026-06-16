@@ -60,6 +60,25 @@ If your panel reports the wrong size, override it in
 ✅ available · ⚙️ achievable via the page engine · ⏳ candidate for a future
 service/entity.
 
+## What the box's advertised features map to
+
+Confirmed against the
+[official protocol doc](https://github.com/cagcoach/ha-ipixel-color/blob/main/iPIXEL-Protocol-Documentation.md),
+[ipixel-ctrl](https://github.com/sdolphin-JP/ipixel-ctrl) and
+[go-ipxl](https://github.com/yyewolf/go-ipxl):
+
+- **"Animation"** = *program mode* (`0x8008`): the panel auto-cycles content you
+  stored in slots, by itself. Save pages/GIFs with `save_slot`, then
+  `set_program: [1,2,3]`. Also covers animated GIF upload (`0x0003`).
+- **"Clock"** = clock mode (`0x0106` + time `0x8001`) → the **clock style**
+  select; ticks on the device.
+- **"Rhythm"** = `0x0201` (levels) / `0x0200` (animation). The panel has **no
+  microphone** — feed levels with `set_rhythm_levels`, or use the self-running
+  `set_rhythm_animation`.
+- **"Fun mode" = DIY / draw mode** (`0x0104` enable, then `0x0105` per pixel).
+  **Enabling it blanks the screen on purpose** — it's an empty canvas waiting
+  for `set_pixel`. This is why the screen went black: it was working, just empty.
+
 ## Program slots (persist without Home Assistant)
 
 `show_page`/`show_image` accept `save_slot: 1-255`, which both displays the
