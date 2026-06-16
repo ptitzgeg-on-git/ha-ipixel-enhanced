@@ -1,0 +1,48 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Select iPIXEL Device",
+        "description": "Choose your iPIXEL Color display from the discovered devices, or select manual entry.",
+        "data": {
+          "device": "Device"
+        }
+      },
+      "manual": {
+        "title": "Manual Setup",
+        "description": "Enter the Bluetooth address of your iPIXEL Color display manually.",
+        "data": {
+          "address": "Bluetooth Address",
+          "name": "Device Name"
+        }
+      },
+      "bluetooth_confirm": {
+        "title": "Confirm iPIXEL Device",
+        "description": "Do you want to add the iPIXEL device {name} ({address}) to Home Assistant?"
+      }
+    },
+    "error": {
+      "cannot_connect": "Failed to connect to the device. Make sure the device is powered on and in range.",
+      "invalid_address": "Invalid Bluetooth address format.",
+      "discovery_failed": "Failed to discover devices. Make sure Bluetooth is enabled.",
+      "no_devices_found": "No iPIXEL devices found. Make sure your device is powered on and in pairing mode.",
+      "device_not_found": "Selected device not found.",
+      "unknown": "Unexpected error occurred."
+    },
+    "abort": {
+      "already_configured": "Device is already configured.",
+      "cannot_connect": "Failed to connect to the device.",
+      "device_not_found": "Device not found.",
+      "discovery_failed": "Device discovery failed.",
+      "no_devices_found": "No devices found.",
+      "unknown": "Unknown error occurred."
+    }
+  },
+  "entity": {
+    "switch": {
+      "power": {
+        "name": "Power"
+      }
+    }
+  }
+}
