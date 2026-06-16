@@ -112,6 +112,48 @@ class iPIXELAPI:
             _LOGGER.error("Error setting clock mode: %s", err)
             return False
 
+    async def probe_device_info(self) -> dict[str, Any] | None:
+        """Best-effort: query the panel over BLE and log what it reports.
+
+        Answers "what does my panel actually say over Bluetooth". Never breaks
+        setup: failures are logged and the cached 32x32 default is kept. If the
+        panel returns valid dimensions and the user hasn't set a manual
+        override, we adopt them (helps non-32x32 models auto-configure).
+        """
+        try:
+            command = build_device_info_command()
+        except ImportError:
+            return None
+        response = await self._bluetooth.query(command)
+        if not response:
+            _LOGGER.info("Device info: no BLE response (panel may not support the query)")
+            return None
+        _LOGGER.info("Device info raw BLE response: %s", response.hex())
+        try:
+            parsed = parse_device_response(response)
+        except Exception as err:  # noqa: BLE001
+            _LOGGER.info("Device info: could not parse response (%s)", err)
+            return None
+        _LOGGER.info(
+            "Device reports: %sx%s, type=%s, mcu=%s, wifi=%s, has_wifi=%s",
+            parsed.get("width"), parsed.get("height"), parsed.get("device_type"),
+            parsed.get("mcu_version"), parsed.get("wifi_version"), parsed.get("has_wifi"),
+        )
+        # Adopt reported dimensions only when sane and not overridden by the user.
+        opts = (self._entry.options if self._entry else {}) or {}
+        if not opts.get(OPT_OVERRIDE_DIMENSIONS):
+            w, h = parsed.get("width"), parsed.get("height")
+            if isinstance(w, int) and isinstance(h, int) and 8 <= w <= 256 and 8 <= h <= 256:
+                if self._device_info is None:
+                    await self.get_device_info()
+                self._device_info["width"] = w
+                self._device_info["height"] = h
+                self._device_info["device_type"] = parsed.get("device_type", 0)
+                self._device_info["device_type_str"] = parsed.get("device_type_str", "Unknown")
+                self._device_info["mcu_version"] = parsed.get("mcu_version", "Unknown")
+                _LOGGER.info("Adopted panel dimensions %dx%d from BLE", w, h)
+        return parsed
+
     async def get_device_info(self) -> dict[str, Any] | None:
         if self._device_info is not None:
             return self._device_info

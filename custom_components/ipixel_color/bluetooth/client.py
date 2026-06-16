@@ -38,6 +38,17 @@ class BluetoothClient:
         self._connected = False
         self._notification_handler: Callable | None = None
         self._chunk_size: int = _DEFAULT_CHUNK
+        self._capture: asyncio.Future | None = None
+
+    def _on_notify(self, sender: Any, data: bytearray) -> None:
+        """Internal notify wrapper: feed any pending capture, then the handler."""
+        if self._capture is not None and not self._capture.done():
+            try:
+                self._capture.set_result(bytes(data))
+            except Exception:  # noqa: BLE001
+                pass
+        if self._notification_handler is not None:
+            self._notification_handler(sender, data)
 
     def _disconnected_callback(self, client: BleakClientWithServiceCache) -> None:
         _LOGGER.warning("iPIXEL device %s disconnected", self._address)
@@ -79,7 +90,7 @@ class BluetoothClient:
                     self._chunk_size = _DEFAULT_CHUNK
                     _LOGGER.debug("MTU fixée à %d (pas de négociation)", _DEFAULT_CHUNK)
 
-            await self._client.start_notify(NOTIFY_UUID, notification_handler)
+            await self._client.start_notify(NOTIFY_UUID, self._on_notify)
             _LOGGER.info("Connected to iPIXEL — chunk_size=%d", self._chunk_size)
             return True
         except BleakError as err:
@@ -159,6 +170,24 @@ class BluetoothClient:
                     return False
             _LOGGER.error("Failed to send command: %s", err)
             return False
+
+    async def query(self, command: bytes, timeout: float = 2.0) -> bytes | None:
+        """Send a small command and return the next notification (or None)."""
+        if not self._connected or not self._client:
+            return None
+        loop = asyncio.get_running_loop()
+        self._capture = loop.create_future()
+        try:
+            for i in range(0, len(command), self._chunk_size):
+                await self._client.write_gatt_char(
+                    WRITE_UUID, command[i: i + self._chunk_size], response=True
+                )
+            return await asyncio.wait_for(self._capture, timeout)
+        except (asyncio.TimeoutError, BleakError) as err:
+            _LOGGER.debug("query: no response (%s)", err)
+            return None
+        finally:
+            self._capture = None
 
     @property
     def is_connected(self) -> bool:
