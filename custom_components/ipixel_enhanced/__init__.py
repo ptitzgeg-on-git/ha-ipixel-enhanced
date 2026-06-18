@@ -22,7 +22,7 @@ STORE_DATA = f"{DOMAIN}_store"
 RUNNER_DATA = f"{DOMAIN}_runner"
 GLOBAL_DATA = f"{DOMAIN}_global_setup"
 PANEL_DATA = f"{DOMAIN}_panel"
-STATIC_URL = "/ipixel_color_static"
+STATIC_URL = "/ipixel_enhanced_static"
 CARD_URL = f"{STATIC_URL}/ipixel-card.js"
 PANEL_URL = f"{STATIC_URL}/ipixel-panel.js"
 

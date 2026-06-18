@@ -20,7 +20,7 @@ from pathlib import Path
 import pytest
 
 REPO = Path(__file__).resolve().parent.parent
-PKG_DIR = REPO / "custom_components" / "ipixel_color"
+PKG_DIR = REPO / "custom_components" / "ipixel_enhanced"
 
 
 def _stub(name: str, is_pkg: bool = False) -> types.ModuleType:
@@ -130,16 +130,16 @@ class _Template:
 
 
 def _load_package() -> None:
-    """Expose the real integration as an importable `ipixel_color` package."""
-    if "ipixel_color" in sys.modules:
+    """Expose the real integration as an importable `ipixel_enhanced` package."""
+    if "ipixel_enhanced" in sys.modules:
         return
-    pkg = types.ModuleType("ipixel_color")
+    pkg = types.ModuleType("ipixel_enhanced")
     pkg.__path__ = [str(PKG_DIR)]
-    sys.modules["ipixel_color"] = pkg
+    sys.modules["ipixel_enhanced"] = pkg
     for sub in ("display", "device", "bluetooth"):
-        subpkg = types.ModuleType(f"ipixel_color.{sub}")
+        subpkg = types.ModuleType(f"ipixel_enhanced.{sub}")
         subpkg.__path__ = [str(PKG_DIR / sub)]
-        sys.modules[f"ipixel_color.{sub}"] = subpkg
+        sys.modules[f"ipixel_enhanced.{sub}"] = subpkg
 
 
 _install_homeassistant_stubs()
@@ -162,24 +162,24 @@ def _import(modname: str):
 
 @pytest.fixture(scope="session")
 def widget_renderer():
-    return _import("ipixel_color.display.widget_renderer")
+    return _import("ipixel_enhanced.display.widget_renderer")
 
 
 @pytest.fixture(scope="session")
 def fonts_mod():
-    return _import("ipixel_color.fonts")
+    return _import("ipixel_enhanced.fonts")
 
 
 @pytest.fixture(scope="session")
 def color_mod():
-    return _import("ipixel_color.color")
+    return _import("ipixel_enhanced.color")
 
 
 @pytest.fixture(scope="session")
 def commands_mod():
-    return _import("ipixel_color.device.commands")
+    return _import("ipixel_enhanced.device.commands")
 
 
 @pytest.fixture(scope="session")
 def pages_mod():
-    return _import("ipixel_color.pages")
+    return _import("ipixel_enhanced.pages")

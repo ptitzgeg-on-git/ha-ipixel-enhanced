@@ -7,22 +7,22 @@ Everything the card does is also available to automations/scripts through
 
 | You want to… | Use |
 |---|---|
-| Show a saved page | `ipixel_color.show_page` with `name:` |
-| Show an inline page | `ipixel_color.show_page` with `page:` |
-| Show scrolling text | `ipixel_color.show_text` with `text:` (templates supported) |
-| Show an emoji | `ipixel_color.show_emoji` with `emoji:` |
-| Show the native clock | `ipixel_color.show_clock` (style / 24h / date) |
+| Show a saved page | `ipixel_enhanced.show_page` with `name:` |
+| Show an inline page | `ipixel_enhanced.show_page` with `page:` |
+| Show scrolling text | `ipixel_enhanced.show_text` with `text:` (templates supported) |
+| Show an emoji | `ipixel_enhanced.show_emoji` with `emoji:` |
+| Show the native clock | `ipixel_enhanced.show_clock` (style / 24h / date) |
 | Refresh a live page (sensors) | call `show_page` on a `time_pattern` trigger, or use the playlist |
-| Start a named playlist | `ipixel_color.start_playlist` with `name:` (+ optional `device_id:`, one or more panels) |
-| Stop the playlist | `ipixel_color.stop_playlist` (+ optional `device_id:` to stop only some panels) |
+| Start a named playlist | `ipixel_enhanced.start_playlist` with `name:` (+ optional `device_id:`, one or more panels) |
+| Stop the playlist | `ipixel_enhanced.stop_playlist` (+ optional `device_id:` to stop only some panels) |
 | Pick a playlist per panel | each panel's **Playlist** select entity (`select.<panel>_playlist`) |
-| Show an image or animated GIF | `ipixel_color.show_image` `source:` |
-| Recall something stored on the device | `ipixel_color.show_slot` `slot:` |
-| Rotate the screen | `ipixel_color.set_orientation` or the **Orientation** select |
+| Show an image or animated GIF | `ipixel_enhanced.show_image` `source:` |
+| Recall something stored on the device | `ipixel_enhanced.show_slot` `slot:` |
+| Rotate the screen | `ipixel_enhanced.set_orientation` or the **Orientation** select |
 | Brightness / power | the `number`/`switch` entities (e.g. `number.<device>_brightness`) |
-| Audio bars | `ipixel_color.set_rhythm_levels` (send repeatedly) |
+| Audio bars | `ipixel_enhanced.set_rhythm_levels` (send repeatedly) |
 
-> **Showing the clock from an automation:** call **`ipixel_color.show_clock`**.
+> **Showing the clock from an automation:** call **`ipixel_enhanced.show_clock`**.
 > Changing the *Clock 24h* / *Clock Style* entities alone does **not** refresh
 > the panel — those are just settings read the next time the clock is shown.
 
@@ -45,7 +45,7 @@ automation:
         entity_id: person.me
         to: home
     action:
-      - service: ipixel_color.show_page
+      - service: ipixel_enhanced.show_page
         target:
           device_id: <your_device>
         data:
@@ -58,7 +58,7 @@ automation:
   - alias: Clock in the evening
     trigger: { platform: time, at: "20:00:00" }
     action:
-      - service: ipixel_color.show_clock
+      - service: ipixel_enhanced.show_clock
         target:
           device_id: <your_device>
         data:
@@ -79,7 +79,7 @@ automation:
         entity_id: binary_sensor.washing_machine_done
         to: "on"
     action:
-      - service: ipixel_color.show_text
+      - service: ipixel_enhanced.show_text
         target: { device_id: <your_device> }
         data:
           text: "Laundry ready 🧺"
@@ -97,7 +97,7 @@ automation:
       - platform: time_pattern
         minutes: "/1"
     action:
-      - service: ipixel_color.show_page
+      - service: ipixel_enhanced.show_page
         target:
           device_id: <your_device>
         data:
@@ -115,25 +115,25 @@ automation:
   - alias: Morning playlist
     trigger: { platform: time, at: "07:00:00" }
     action:
-      - service: ipixel_color.start_playlist
+      - service: ipixel_enhanced.start_playlist
         data: { name: "Morning" }
   - alias: Night playlist
     trigger: { platform: time, at: "19:00:00" }
     action:
-      - service: ipixel_color.start_playlist
+      - service: ipixel_enhanced.start_playlist
         data: { name: "Night" }
   # Target specific panels (and run the same playlist on several at once):
   - alias: Night playlist on the two living-room panels
     trigger: { platform: time, at: "19:00:00" }
     action:
-      - service: ipixel_color.start_playlist
+      - service: ipixel_enhanced.start_playlist
         data:
           name: "Night"
           device_id: [<panel_a>, <panel_b>]
   - alias: Off late
     trigger: { platform: time, at: "23:00:00" }
     action:
-      - service: ipixel_color.stop_playlist
+      - service: ipixel_enhanced.stop_playlist
       - service: switch.turn_off
         target: { entity_id: switch.<your_device> }   # power off the panel
 ```
@@ -147,7 +147,7 @@ automation:
         entity_id: binary_sensor.doorbell
         to: "on"
     action:
-      - service: ipixel_color.show_page
+      - service: ipixel_enhanced.show_page
         target: { device_id: <your_device> }
         data:
           page:
@@ -155,14 +155,14 @@ automation:
             widgets:
               - { type: emoji, emoji: "🔔", anchor: center, size: 18 }
       - delay: "00:00:10"
-      - service: ipixel_color.show_page          # restore your usual page
+      - service: ipixel_enhanced.show_page          # restore your usual page
         target: { device_id: <your_device> }
         data: { name: dashboard }
 ```
 
 ### Show an animated GIF
 ```yaml
-- service: ipixel_color.show_image
+- service: ipixel_enhanced.show_image
   target: { device_id: <your_device> }
   data:
     source: /local/party.gif     # file in config/www/, or an http(s) URL
@@ -171,11 +171,11 @@ automation:
 ### Store a page on the device, recall it later (works even if HA is off)
 ```yaml
 # Save once:
-- service: ipixel_color.show_page
+- service: ipixel_enhanced.show_page
   target: { device_id: <your_device> }
   data: { name: dashboard, save_slot: 1 }
 # Recall any time (no rendering, instant):
-- service: ipixel_color.show_slot
+- service: ipixel_enhanced.show_slot
   target: { device_id: <your_device> }
   data: { slot: 1 }
 ```
@@ -186,14 +186,14 @@ then start the device-side rotation — it keeps running with **no Home Assistan
 and no Bluetooth**:
 ```yaml
 # 1) store a few screens (once)
-- service: ipixel_color.show_page
+- service: ipixel_enhanced.show_page
   target: { device_id: <your_device> }
   data: { name: weather, save_slot: 1 }
-- service: ipixel_color.show_image
+- service: ipixel_enhanced.show_image
   target: { device_id: <your_device> }
   data: { source: /local/cat.gif, save_slot: 2 }
 # 2) tell the panel to auto-cycle them
-- service: ipixel_color.set_program
+- service: ipixel_enhanced.set_program
   target: { device_id: <your_device> }
   data: { slots: [1, 2] }
 ```
@@ -202,7 +202,7 @@ and no Bluetooth**:
 The panel has **no microphone** and Home Assistant does not expose a real-time
 audio stream from media players (Spotify, radio…) or the phone, so there's no
 lightweight way to make the bars truly react to sound — the rhythm mode is not
-surfaced in the UI. The protocol-level service `ipixel_color.set_rhythm_levels`
+surfaced in the UI. The protocol-level service `ipixel_enhanced.set_rhythm_levels`
 (feed 11 levels, 0-15) still exists for advanced setups that already produce an
 audio-spectrum sensor.
 

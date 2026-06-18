@@ -80,7 +80,7 @@ you bind any entity, attribute or API-backed sensor directly. A few patterns:
 For data from an external API: create a [REST sensor](https://www.home-assistant.io/integrations/rest/)
 (or any integration) in Home Assistant, then reference `states('sensor.xxx')`
 here. The display refreshes when you press **Send now**, when the **playlist**
-re-renders the page, or when you call the `ipixel_color.show_page` service from
+re-renders the page, or when you call the `ipixel_enhanced.show_page` service from
 an automation (e.g. on a `time_pattern` trigger every minute).
 
 > The card ships **starter examples** (Battery bar, Temperature, Two sensors,

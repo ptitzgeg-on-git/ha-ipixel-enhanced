@@ -219,7 +219,7 @@ class iPIXELFunModeSwitch(SwitchEntity):
     """Enable the panel's DIY/draw mode.
 
     Turning this on clears the screen to a blank canvas; you then light pixels
-    with the ipixel_color.set_pixel service. (This is the device's 'fun'/DIY
+    with the ipixel_enhanced.set_pixel service. (This is the device's 'fun'/DIY
     drawing mode — a black screen when enabled is expected.)
     """
 

@@ -121,17 +121,17 @@ entity, so you can drive it straight from an automation.
 
 | Service | Purpose |
 |---|---|
-| `ipixel_color.show_page` | Render a saved page (`name`) or an inline `page` and push it to a device. Optional `save_slot` stores it on the device. |
-| `ipixel_color.show_text` | Quick scrolling text (templates supported). |
-| `ipixel_color.show_emoji` | Show a single emoji. |
-| `ipixel_color.show_clock` | Switch the panel to its native clock mode (ticks on the device). Use this from automations. |
-| `ipixel_color.show_image` | Send an image or **animated GIF** (URL or `/local/...`). GIFs play natively. |
-| `ipixel_color.set_orientation` | Rotate the display (0/90/180/270°). Also an **Orientation** select entity. |
-| `ipixel_color.set_fun_mode` | Toggle the panel's built-in effect mode. Also a **Fun Mode** switch. |
-| `ipixel_color.show_slot` / `delete_slot` | Recall / delete a program stored in device memory. |
-| `ipixel_color.set_program` | Make the panel loop several stored slots by itself. |
-| `ipixel_color.start_playlist` / `stop_playlist` | Start a **named** playlist (created in the card) on one or more panels (`device_id`, accepts several), or stop it on the chosen panels. |
-| `ipixel_color.set_playlist` | Legacy on/off shim — `enable: false` stops playback; use `start_playlist` to start. |
+| `ipixel_enhanced.show_page` | Render a saved page (`name`) or an inline `page` and push it to a device. Optional `save_slot` stores it on the device. |
+| `ipixel_enhanced.show_text` | Quick scrolling text (templates supported). |
+| `ipixel_enhanced.show_emoji` | Show a single emoji. |
+| `ipixel_enhanced.show_clock` | Switch the panel to its native clock mode (ticks on the device). Use this from automations. |
+| `ipixel_enhanced.show_image` | Send an image or **animated GIF** (URL or `/local/...`). GIFs play natively. |
+| `ipixel_enhanced.set_orientation` | Rotate the display (0/90/180/270°). Also an **Orientation** select entity. |
+| `ipixel_enhanced.set_fun_mode` | Toggle the panel's built-in effect mode. Also a **Fun Mode** switch. |
+| `ipixel_enhanced.show_slot` / `delete_slot` | Recall / delete a program stored in device memory. |
+| `ipixel_enhanced.set_program` | Make the panel loop several stored slots by itself. |
+| `ipixel_enhanced.start_playlist` / `stop_playlist` | Start a **named** playlist (created in the card) on one or more panels (`device_id`, accepts several), or stop it on the chosen panels. |
+| `ipixel_enhanced.set_playlist` | Legacy on/off shim — `enable: false` stops playback; use `start_playlist` to start. |
 
 See **[AUTOMATIONS.md](AUTOMATIONS.md)** for ready-to-use automation examples
 (arrival page, day/night playlist, doorbell alert, GIFs, device slots…).
@@ -156,7 +156,7 @@ Example automation:
       entity_id: sensor.rain_probability
       above: 60
   action:
-    - service: ipixel_color.show_page
+    - service: ipixel_enhanced.show_page
       target:
         device_id: <your_device>
       data:

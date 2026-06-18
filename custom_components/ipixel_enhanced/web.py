@@ -17,14 +17,14 @@ from .display.widget_renderer import render_page
 
 _LOGGER = logging.getLogger(__name__)
 
-PREVIEW_URL = "/api/ipixel_color/preview"
+PREVIEW_URL = "/api/ipixel_enhanced/preview"
 
 
 class PreviewView(HomeAssistantView):
     """Render a page server-side and return a base64 PNG for the live preview."""
 
     url = PREVIEW_URL
-    name = "api:ipixel_color:preview"
+    name = "api:ipixel_enhanced:preview"
     requires_auth = True
 
     async def post(self, request: web.Request) -> web.Response:
@@ -111,7 +111,7 @@ def _api_for_device(hass: HomeAssistant, device_id: str | None):
     return next(iter(apis.values()))
 
 
-@websocket_api.websocket_command({vol.Required("type"): "ipixel_color/pages/list"})
+@websocket_api.websocket_command({vol.Required("type"): "ipixel_enhanced/pages/list"})
 @callback
 def ws_list(hass, connection, msg):
     store = _store(hass)
@@ -144,7 +144,7 @@ def ws_list(hass, connection, msg):
 
 
 @websocket_api.websocket_command({
-    vol.Required("type"): "ipixel_color/pages/save",
+    vol.Required("type"): "ipixel_enhanced/pages/save",
     vol.Required("name"): str,
     vol.Required("page"): dict,
 })
@@ -159,7 +159,7 @@ async def ws_save(hass, connection, msg):
 
 
 @websocket_api.websocket_command({
-    vol.Required("type"): "ipixel_color/pages/delete",
+    vol.Required("type"): "ipixel_enhanced/pages/delete",
     vol.Required("name"): str,
 })
 @websocket_api.async_response
@@ -177,7 +177,7 @@ def _playlist_state(store):
 
 
 @websocket_api.websocket_command({
-    vol.Required("type"): "ipixel_color/playlists/save",
+    vol.Required("type"): "ipixel_enhanced/playlists/save",
     vol.Required("name"): str,
     vol.Required("items"): list,
     vol.Optional("targets"): vol.Any(None, [str]),
@@ -199,7 +199,7 @@ async def ws_pl_save(hass, connection, msg):
 
 
 @websocket_api.websocket_command({
-    vol.Required("type"): "ipixel_color/playlists/delete",
+    vol.Required("type"): "ipixel_enhanced/playlists/delete",
     vol.Required("name"): str,
 })
 @websocket_api.async_response
@@ -216,7 +216,7 @@ async def ws_pl_delete(hass, connection, msg):
 
 
 @websocket_api.websocket_command({
-    vol.Required("type"): "ipixel_color/playlists/start",
+    vol.Required("type"): "ipixel_enhanced/playlists/start",
     vol.Required("name"): str,
     vol.Optional("targets"): vol.Any(None, [str]),
 })
@@ -246,7 +246,7 @@ async def ws_pl_start(hass, connection, msg):
 
 
 @websocket_api.websocket_command({
-    vol.Required("type"): "ipixel_color/playlists/stop",
+    vol.Required("type"): "ipixel_enhanced/playlists/stop",
     vol.Optional("targets"): vol.Any(None, [str]),
 })
 @websocket_api.async_response
@@ -272,7 +272,7 @@ async def ws_pl_stop(hass, connection, msg):
 
 
 @websocket_api.websocket_command({
-    vol.Required("type"): "ipixel_color/slots/set",
+    vol.Required("type"): "ipixel_enhanced/slots/set",
     vol.Required("name"): str,
     vol.Required("slot"): vol.Any(None, vol.All(int, vol.Range(min=1, max=255))),
 })
@@ -287,7 +287,7 @@ async def ws_slot_set(hass, connection, msg):
 
 
 @websocket_api.websocket_command({
-    vol.Required("type"): "ipixel_color/draw_grid",
+    vol.Required("type"): "ipixel_enhanced/draw_grid",
     vol.Optional("target"): vol.Any(None, str),
     vol.Required("width"): int,
     vol.Required("height"): int,

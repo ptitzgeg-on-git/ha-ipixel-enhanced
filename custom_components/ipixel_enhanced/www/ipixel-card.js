@@ -124,7 +124,7 @@ class IPixelCard extends HTMLElement {
   // ---------- server calls ----------
   async _loadLibrary() {
     try {
-      const res = await this._hass.connection.sendMessagePromise({ type: "ipixel_color/pages/list" });
+      const res = await this._hass.connection.sendMessagePromise({ type: "ipixel_enhanced/pages/list" });
       this._library = res.pages || {};
       this._playlists = res.playlists || {};
       this._runs = res.runs || {};
@@ -149,7 +149,7 @@ class IPixelCard extends HTMLElement {
   async _renderPreview() {
     if (!this._hass || !this._img) return;
     try {
-      const res = await this._hass.callApi("POST", "ipixel_color/preview", {
+      const res = await this._hass.callApi("POST", "ipixel_enhanced/preview", {
         page: this._page, width: this._gw, height: this._gh, scale: PREVIEW_SCALE,
       });
       if (this._img) this._img.src = res.image;
@@ -499,7 +499,7 @@ class IPixelCard extends HTMLElement {
     const name = (this._nameInput.value || "").trim();
     if (!name) return this._status("Enter a page name first.", true);
     try {
-      await this._hass.connection.sendMessagePromise({ type: "ipixel_color/pages/save", name, page: this._page });
+      await this._hass.connection.sendMessagePromise({ type: "ipixel_enhanced/pages/save", name, page: this._page });
       this._library[name] = clone(this._page);
       this._refreshLibraryList(); this._librarySel.value = name; this._status(`Saved “${name}”.`);
     } catch (e) { this._status("Save failed: " + e, true); }
@@ -514,7 +514,7 @@ class IPixelCard extends HTMLElement {
   async _deletePage() {
     const name = this._librarySel.value; if (!name) return this._status("Pick a page to delete.", true);
     try {
-      await this._hass.connection.sendMessagePromise({ type: "ipixel_color/pages/delete", name });
+      await this._hass.connection.sendMessagePromise({ type: "ipixel_enhanced/pages/delete", name });
       delete this._library[name]; this._refreshLibraryList(); this._status(`Deleted “${name}”.`);
     } catch (e) { this._status("Delete failed: " + e, true); }
   }
@@ -523,7 +523,7 @@ class IPixelCard extends HTMLElement {
     await this._busy(ev, async () => {
       this._status("Sending…");
       try {
-        await this._hass.callService("ipixel_color", "show_page", { page: this._page }, { device_id: this._device });
+        await this._hass.callService("ipixel_enhanced", "show_page", { page: this._page }, { device_id: this._device });
         this._status("Sent to display.");
       } catch (e) { this._status("Send failed: " + e, true); }
     });
@@ -555,7 +555,7 @@ class IPixelCard extends HTMLElement {
     live.addEventListener("change", async () => {
       this._liveDraw = live.checked;
       if (this._liveDraw && this._device) {
-        await this._hass.callService("ipixel_color", "set_fun_mode", { enable: true }, { device_id: this._device });
+        await this._hass.callService("ipixel_enhanced", "set_fun_mode", { enable: true }, { device_id: this._device });
         this._status("Live draw ON — DIY mode enabled on the panel.");
       }
     });
@@ -628,7 +628,7 @@ class IPixelCard extends HTMLElement {
     while (this._liveQueue.length) {
       const p = this._liveQueue.shift();
       try {
-        await this._hass.callService("ipixel_color", "set_pixel",
+        await this._hass.callService("ipixel_enhanced", "set_pixel",
           { x: p.x, y: p.y, color: p.color }, { device_id: this._device });
       } catch (e) {
         this._status("set_pixel failed: " + e, true);
@@ -643,7 +643,7 @@ class IPixelCard extends HTMLElement {
       this._status("Sending…");
       try {
         await this._hass.connection.sendMessagePromise({
-          type: "ipixel_color/draw_grid", target: this._device,
+          type: "ipixel_enhanced/draw_grid", target: this._device,
           width: this._gw, height: this._gh, background: "000000",
           pixels: this._grid.map((c) => c || ""),
         });
@@ -791,7 +791,7 @@ class IPixelCard extends HTMLElement {
     }
     if (this._plAuto) {
       this._plAuto.textContent = this._currentPl
-        ? `Automation:  service: ipixel_color.start_playlist   data: { name: "${this._currentPl}" }`
+        ? `Automation:  service: ipixel_enhanced.start_playlist   data: { name: "${this._currentPl}" }`
         : "";
     }
   }
@@ -821,8 +821,8 @@ class IPixelCard extends HTMLElement {
     if (this._playlists[name]) return this._status(`“${name}” already exists.`, true);
     const pl = this._playlists[old];
     try {
-      await this._hass.connection.sendMessagePromise({ type: "ipixel_color/playlists/save", name, items: pl.items || [], targets: pl.targets || [] });
-      const res = await this._hass.connection.sendMessagePromise({ type: "ipixel_color/playlists/delete", name: old });
+      await this._hass.connection.sendMessagePromise({ type: "ipixel_enhanced/playlists/save", name, items: pl.items || [], targets: pl.targets || [] });
+      const res = await this._hass.connection.sendMessagePromise({ type: "ipixel_enhanced/playlists/delete", name: old });
       this._playlists = res.playlists || this._playlists; this._runs = res.runs || this._runs;
       this._currentPl = name;
       this._refreshPlaylist();
@@ -835,7 +835,7 @@ class IPixelCard extends HTMLElement {
     if (!name) return this._status("Pick a playlist first.", true);
     await this._busy(ev, async () => {
       try {
-        const res = await this._hass.connection.sendMessagePromise({ type: "ipixel_color/playlists/delete", name });
+        const res = await this._hass.connection.sendMessagePromise({ type: "ipixel_enhanced/playlists/delete", name });
         this._playlists = res.playlists || {}; this._runs = res.runs || {};
         this._currentPl = Object.keys(this._playlists)[0] || null;
         this._refreshPlaylist();
@@ -850,7 +850,7 @@ class IPixelCard extends HTMLElement {
     if (!pl) return this._status("Create a playlist first.", true);
     await this._busy(ev, async () => {
       try {
-        const res = await this._hass.connection.sendMessagePromise({ type: "ipixel_color/playlists/save", name, items: pl.items || [], targets: pl.targets || [] });
+        const res = await this._hass.connection.sendMessagePromise({ type: "ipixel_enhanced/playlists/save", name, items: pl.items || [], targets: pl.targets || [] });
         this._playlists = res.playlists || this._playlists; this._runs = res.runs || this._runs;
         this._refreshPlaylist();
         this._status(`Saved “${name}”.`);
@@ -868,8 +868,8 @@ class IPixelCard extends HTMLElement {
     await this._busy(ev, async () => {
       try {
         // persist current edits first, then start
-        await this._hass.connection.sendMessagePromise({ type: "ipixel_color/playlists/save", name, items: pl.items || [], targets: pl.targets || [] });
-        const res = await this._hass.connection.sendMessagePromise({ type: "ipixel_color/playlists/start", name, targets });
+        await this._hass.connection.sendMessagePromise({ type: "ipixel_enhanced/playlists/save", name, items: pl.items || [], targets: pl.targets || [] });
+        const res = await this._hass.connection.sendMessagePromise({ type: "ipixel_enhanced/playlists/start", name, targets });
         this._playlists = res.playlists || this._playlists; this._runs = res.runs || this._runs;
         this._refreshPlaylist();
         this._status(`Playing “${name}”.`);
@@ -883,7 +883,7 @@ class IPixelCard extends HTMLElement {
     const targets = (pl && pl.targets && pl.targets.length) ? pl.targets : null;
     await this._busy(ev, async () => {
       try {
-        const msg = { type: "ipixel_color/playlists/stop" };
+        const msg = { type: "ipixel_enhanced/playlists/stop" };
         if (targets) msg.targets = targets;
         const res = await this._hass.connection.sendMessagePromise(msg);
         this._runs = res.runs || {};
@@ -957,7 +957,7 @@ class IPixelCard extends HTMLElement {
   _thumb(page) {
     const img = el("img", { class: "ipx-thumb" });
     if (this._hass) {
-      this._hass.callApi("POST", "ipixel_color/preview", { page, width: this._gw, height: this._gh, scale: 3 })
+      this._hass.callApi("POST", "ipixel_enhanced/preview", { page, width: this._gw, height: this._gh, scale: 3 })
         .then((res) => { img.src = res.image; })
         .catch(() => {});
     }
@@ -986,7 +986,7 @@ class IPixelCard extends HTMLElement {
     this._slots = this._slots || {};
     if (slot == null) delete this._slots[name]; else this._slots[name] = slot;
     try {
-      const res = await this._hass.connection.sendMessagePromise({ type: "ipixel_color/slots/set", name, slot: slot ?? null });
+      const res = await this._hass.connection.sendMessagePromise({ type: "ipixel_enhanced/slots/set", name, slot: slot ?? null });
       this._slots = res.slots || this._slots;
     } catch (e) { this._status("Could not save slot assignment: " + e, true); }
   }
@@ -996,7 +996,7 @@ class IPixelCard extends HTMLElement {
     if (slot == null) return;
     await this._busy(ev, async () => {
       try {
-        if (this._device) await this._hass.callService("ipixel_color", "delete_slot", { slot }, { device_id: this._device });
+        if (this._device) await this._hass.callService("ipixel_enhanced", "delete_slot", { slot }, { device_id: this._device });
         await this._setSlot(name, null);
         this._status(`Cleared slot ${slot} on the panel — “${name}” is no longer stored (still in your library).`);
         this._renderTab();
@@ -1011,7 +1011,7 @@ class IPixelCard extends HTMLElement {
     await this._busy(ev, async () => {
       this._status(`Saving “${name}” to slot ${slot}…`);
       try {
-        await this._hass.callService("ipixel_color", "show_page", { page, save_slot: slot }, { device_id: this._device });
+        await this._hass.callService("ipixel_enhanced", "show_page", { page, save_slot: slot }, { device_id: this._device });
         await this._setSlot(name, slot);
         this._status(`Saved “${name}” to slot ${slot} (and shown now).`);
         this._renderTab();
@@ -1068,7 +1068,7 @@ class IPixelCard extends HTMLElement {
     const out = [];
     const reg = this._hass.entities || {};
     for (const [eid, ent] of Object.entries(reg)) {
-      if (ent.platform === "ipixel_color" && ent.device_id === this._device) {
+      if (ent.platform === "ipixel_enhanced" && ent.device_id === this._device) {
         const d = eid.split(".")[0];
         if (["switch", "number", "select"].includes(d)) out.push(eid);
       }
@@ -1089,7 +1089,7 @@ class IPixelCard extends HTMLElement {
   async _svc(service, data, ev) {
     if (!this._device) return this._status("No device selected.", true);
     await this._busy(ev, async () => {
-      try { await this._hass.callService("ipixel_color", service, data, { device_id: this._device }); this._status(`${service} sent.`); }
+      try { await this._hass.callService("ipixel_enhanced", service, data, { device_id: this._device }); this._status(`${service} sent.`); }
       catch (e) { this._status(`${service} failed: ` + e, true); }
     });
   }
