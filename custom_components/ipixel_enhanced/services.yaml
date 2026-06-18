@@ -3,7 +3,7 @@ show_text:
   description: Scroll or display text on the panel using the device's built-in text engine (ticks on the panel, no Bluetooth traffic once sent).
   target:
     device:
-      integration: ipixel_color
+      integration: ipixel_enhanced
   fields:
     text:
       name: Text
@@ -64,7 +64,7 @@ show_emoji:
   description: Render a colour emoji full-screen on the panel (Twemoji).
   target:
     device:
-      integration: ipixel_color
+      integration: ipixel_enhanced
   fields:
     emoji:
       name: Emoji
@@ -89,7 +89,7 @@ show_clock:
     the Clock entities alone does not refresh the display).
   target:
     device:
-      integration: ipixel_color
+      integration: ipixel_enhanced
   fields:
     style:
       name: Style
@@ -123,7 +123,7 @@ show_page:
     page "name" (created in the iPIXEL card) or an inline "page" definition.
   target:
     device:
-      integration: ipixel_color
+      integration: ipixel_enhanced
   fields:
     name:
       name: Saved page name
@@ -158,7 +158,7 @@ set_orientation:
   description: Rotate the display (hardware orientation, affects all modes).
   target:
     device:
-      integration: ipixel_color
+      integration: ipixel_enhanced
   fields:
     orientation:
       name: Orientation
@@ -175,7 +175,7 @@ set_fun_mode:
   description: Toggle the panel's built-in 'fun' effect mode.
   target:
     device:
-      integration: ipixel_color
+      integration: ipixel_enhanced
   fields:
     enable:
       name: Enable
@@ -190,7 +190,7 @@ show_image:
     Source can be an http(s) URL or a local path (/local/... = your config/www).
   target:
     device:
-      integration: ipixel_color
+      integration: ipixel_enhanced
   fields:
     source:
       name: Source
@@ -215,7 +215,7 @@ show_slot:
   description: Recall a program stored in the device's memory (no Home Assistant needed afterwards).
   target:
     device:
-      integration: ipixel_color
+      integration: ipixel_enhanced
   fields:
     slot:
       name: Slot
@@ -231,7 +231,7 @@ delete_slot:
   description: Delete a stored program slot on the device.
   target:
     device:
-      integration: ipixel_color
+      integration: ipixel_enhanced
   fields:
     slot:
       name: Slot
@@ -246,7 +246,7 @@ set_rhythm_animation:
   description: Play a self-contained rhythm/visualizer animation on the panel (no audio feed needed).
   target:
     device:
-      integration: ipixel_color
+      integration: ipixel_enhanced
   fields:
     style:
       name: Style
@@ -270,7 +270,7 @@ set_rhythm_levels:
     sensor). Send repeatedly to animate. 11 levels, each 0-15.
   target:
     device:
-      integration: ipixel_color
+      integration: ipixel_enhanced
   fields:
     style:
       name: Style
@@ -304,7 +304,7 @@ set_playlist:
       required: false
       selector:
         device:
-          integration: ipixel_color
+          integration: ipixel_enhanced
           multiple: true
 
 start_playlist:
@@ -328,7 +328,7 @@ start_playlist:
       required: false
       selector:
         device:
-          integration: ipixel_color
+          integration: ipixel_enhanced
           multiple: true
 
 stop_playlist:
@@ -341,7 +341,7 @@ stop_playlist:
       required: false
       selector:
         device:
-          integration: ipixel_color
+          integration: ipixel_enhanced
           multiple: true
 
 set_program:
@@ -352,7 +352,7 @@ set_program:
     here. Runs on the device with no Home Assistant or Bluetooth needed.
   target:
     device:
-      integration: ipixel_color
+      integration: ipixel_enhanced
   fields:
     slots:
       name: Slots
@@ -369,7 +369,7 @@ set_pixel:
     then you draw). color is a hex string like ff0000.
   target:
     device:
-      integration: ipixel_color
+      integration: ipixel_enhanced
   fields:
     x:
       name: X

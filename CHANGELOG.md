@@ -3,6 +3,19 @@
 All notable changes to **iPIXEL Enhanced** are documented here.
 This project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.8.0] — 2026-06-18
+
+### Changed — ⚠️ BREAKING
+- **The integration domain is now `ipixel_enhanced`** (was `ipixel_color`), so
+  this fork has its own identity and brand icon instead of inheriting the
+  upstream's. Services are now `ipixel_enhanced.*` and the integration must be
+  removed and re-added in Home Assistant.
+
+  **Migration:** Settings → Devices & Services → delete the old *iPIXEL* entry,
+  then *Add Integration* → **iPIXEL** and re-pair. Update any automation calling
+  `ipixel_color.*` to `ipixel_enhanced.*`. Dashboards using `custom:ipixel-card`
+  are unaffected.
+
 ## [0.7.2] — 2026-06-18
 
 ### Fixed
@@ -51,6 +64,7 @@ This project adheres to [Semantic Versioning](https://semver.org/).
 - Visual page designer with live 32×32 preview, sidebar panel, native clock and
   entity cleanup.
 
+[0.8.0]: https://github.com/ptitzgeg-on-git/ha-ipixel-enhanced/releases/tag/v0.8.0
 [0.7.2]: https://github.com/ptitzgeg-on-git/ha-ipixel-enhanced/releases/tag/v0.7.2
 [0.7.1]: https://github.com/ptitzgeg-on-git/ha-ipixel-enhanced/releases/tag/v0.7.1
 [0.7.0]: https://github.com/ptitzgeg-on-git/ha-ipixel-enhanced/releases/tag/v0.7.0

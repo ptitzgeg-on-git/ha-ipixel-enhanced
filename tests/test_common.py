@@ -17,7 +17,7 @@ def run(coro):
 def common(monkeypatch):
     import importlib
 
-    mod = importlib.import_module("ipixel_color.common")
+    mod = importlib.import_module("ipixel_enhanced.common")
     return mod
 
 
