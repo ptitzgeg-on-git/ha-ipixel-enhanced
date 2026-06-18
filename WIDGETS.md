@@ -127,10 +127,27 @@ not by selecting a font.)
 | `size` | `12` | Square size in px. |
 
 ### `clock`
+A clock **rendered** as text (composites with other widgets, previews live).
 Same fields as `text`, plus:
 | Field | Default | Notes |
 |---|---|---|
 | `format` | `%H:%M` | Python `strftime`. |
+
+> A rendered `clock` is a still image and only updates when the page is re-sent
+> (e.g. via a playlist). For a clock that ticks on its own, use `native_clock`.
+
+### `native_clock`
+Switches the panel to its **built-in clock mode** — it ticks by itself on the
+device, with no Bluetooth traffic afterwards. This is an **exclusive** mode: it
+takes over the whole panel, so any other widgets on the page are ignored when
+it's sent, and there is **no live preview** (the designer shows the current time
+as a stand-in only — the firmware draws the real face).
+
+| Field | Default | Notes |
+|---|---|---|
+| `style` | `1` | Built-in clock style, `0`–`8`. |
+| `format_24` | `true` | 24-hour vs 12-hour. |
+| `show_date` | `true` | Show the date alongside the time. |
 
 ### `line`
 | Field | Default | Notes |
@@ -162,6 +179,20 @@ Same fields as `text`, plus:
 |---|---|---|
 | `src` | — | `http(s)://…`, `/local/…` (your `config/www`), or an absolute path. |
 | `width` `height` | image size | Target box. |
+| `fit` | `contain` | `contain` / `cover` / `stretch`. |
+
+### `gif`
+Same fields as `image` (`src`, `width`, `height`, `fit`) and the same
+positioning — but an **animated** GIF source plays on the panel. When a page
+contains an animated GIF, the whole page is rendered as a multi-frame GIF (every
+other widget stays as drawn) and uploaded so the device plays it natively. A
+single-frame source behaves like a still `image`. Heavy GIFs are capped to keep
+the Bluetooth upload reasonable, so the playback may be resampled.
+
+| Field | Default | Notes |
+|---|---|---|
+| `src` | — | `http(s)://…`, `/local/…` (your `config/www`), or an absolute path. Animated GIF for motion. |
+| `width` `height` | gif size | Target box. |
 | `fit` | `contain` | `contain` / `cover` / `stretch`. |
 
 ---

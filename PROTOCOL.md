@@ -47,18 +47,22 @@ If your panel reports the wrong size, override it in
 | setTime / device info | Sync clock, read params | ✅ (auto on connect) |
 | getFirmwareVersions | Firmware query | ✅ (logged) |
 | showText | Text + animation/color/rainbow/font | ✅ `show_text`, designer |
-| showImage | Image/GIF transfer (chunked, CRC) | ✅ `show_image` service (animated GIF native) + designer `image` widget |
-| showClock | Native clock styles, calendar, 12/24h | ✅ `select` clock style |
+| showImage | Image/GIF transfer (chunked, CRC) | ✅ `show_image` service (animated GIF native) + designer `image` / `gif` widgets |
+| showClock | Native clock styles, calendar, 12/24h | ✅ `select` clock style, `show_clock` service, designer `native_clock` widget |
 | showPixel | Set individual pixels (RGB) | ⚙️ via rendered pages (engine draws pixels) |
 | setRotation | Display orientation (0/90/180/270) | ✅ `Orientation` select + `set_orientation` service |
 | setSpeed | Animation speed | ✅ in `show_text` |
 | setFunMode | Built-in effect mode | ✅ `Fun Mode` switch + `set_fun_mode` service |
-| showRhythmLevels / showRhythmAnimation | Audio-reactive visualizations | ⏳ not yet exposed |
-| setProgramList / showSlot / deleteSlot | Save/recall stored programs | ✅ `save_slot` on show_page/show_image + `show_slot`/`delete_slot` services |
+| showRhythmLevels / showRhythmAnimation | Audio-reactive visualizations | ⚙️ `set_rhythm_levels` service only — not in the UI (panel has no mic, see below) |
+| setProgramList / showSlot / deleteSlot | Save/recall stored programs | ✅ `save_slot` on show_page/show_image + `show_slot`/`delete_slot`/`set_program` services + Slots tab |
 | clear | Blank the display | ⚙️ (send an all-black page) |
 
-✅ available · ⚙️ achievable via the page engine · ⏳ candidate for a future
-service/entity.
+✅ available · ⚙️ achievable via the page engine / advanced service.
+
+The **rhythm/visualizer** is intentionally not exposed in the card: the panel has
+no microphone, and Home Assistant has no lightweight real-time audio feed from
+media players or a phone to drive it. `set_rhythm_levels` remains for setups that
+already compute an 11-band spectrum.
 
 ## What the box's advertised features map to
 

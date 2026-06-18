@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import logging
-from typing import Any
 
 from homeassistant.components.button import ButtonEntity
 from homeassistant.config_entries import ConfigEntry
@@ -55,19 +54,13 @@ class iPIXELUpdateButton(ButtonEntity):
         self._name = name
         self._attr_name = "Update Display"
         self._attr_unique_id = f"{address}_update_button"
-        self._attr_entity_description = "Manually update display with current text and settings"
-        
+
         self._attr_device_info = build_device_info(api, address, name)
 
     async def async_press(self) -> None:
         """Handle button press to update display."""
         _LOGGER.debug("Manual display update triggered")
         await update_ipixel_display(self.hass, self._name, self._api)
-
-    @property
-    def available(self) -> bool:
-        """Return True if entity is available."""
-        return True
 
 
 class iPIXELSyncTimeButton(ButtonEntity):
@@ -92,7 +85,6 @@ class iPIXELSyncTimeButton(ButtonEntity):
         self._name = name
         self._attr_name = "Sync Time"
         self._attr_unique_id = f"{address}_sync_time_button"
-        self._attr_entity_description = "Sync current time to device clock"
 
         self._attr_device_info = build_device_info(api, address, name)
 
@@ -115,8 +107,3 @@ class iPIXELSyncTimeButton(ButtonEntity):
 
         except Exception as err:
             _LOGGER.error("Error during time sync: %s", err)
-
-    @property
-    def available(self) -> bool:
-        """Return True if entity is available."""
-        return True

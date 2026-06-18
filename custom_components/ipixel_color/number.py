@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import logging
-from typing import Any
 
 from homeassistant.components.number import NumberEntity, NumberMode
 from homeassistant.config_entries import ConfigEntry
@@ -13,7 +12,7 @@ from homeassistant.helpers.restore_state import RestoreEntity
 
 from .api import iPIXELAPI
 from .const import DOMAIN, CONF_ADDRESS, CONF_NAME
-from .common import get_entity_id_by_unique_id, build_device_info
+from .common import trigger_auto_update, build_device_info
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -65,8 +64,7 @@ class iPIXELFontSize(NumberEntity, RestoreEntity):
         self._attr_name = "Font Size"
         self._attr_unique_id = f"{address}_font_size"
         self._attr_native_value = 0.0  # 0 means auto-sizing
-        self._attr_entity_description = "Font size in pixels (0 = auto-sizing, supports decimals)"
-        
+
         self._attr_device_info = build_device_info(api, address, name)
 
     async def async_added_to_hass(self) -> None:
@@ -97,13 +95,8 @@ class iPIXELFontSize(NumberEntity, RestoreEntity):
                 _LOGGER.debug("Font size changed to: %.1f pixels", value)
             # Note: The actual font size will be used when text is displayed
         else:
-            _LOGGER.error("Invalid font size: %f (min: %f, max: %f)", 
+            _LOGGER.error("Invalid font size: %f (min: %f, max: %f)",
                          value, self._attr_native_min_value, self._attr_native_max_value)
-
-    @property
-    def available(self) -> bool:
-        """Return True if entity is available."""
-        return True
 
 
 class iPIXELLineSpacing(NumberEntity, RestoreEntity):
@@ -132,8 +125,7 @@ class iPIXELLineSpacing(NumberEntity, RestoreEntity):
         self._attr_name = "Line Spacing"
         self._attr_unique_id = f"{address}_line_spacing"
         self._attr_native_value = 0  # Default to no extra spacing
-        self._attr_entity_description = "Extra spacing between lines in pixels (for multiline text)"
-        
+
         self._attr_device_info = build_device_info(api, address, name)
 
     async def async_added_to_hass(self) -> None:
@@ -161,13 +153,8 @@ class iPIXELLineSpacing(NumberEntity, RestoreEntity):
             _LOGGER.debug("Line spacing changed to: %d pixels", int(value))
             # Note: The actual line spacing will be used when text is displayed
         else:
-            _LOGGER.error("Invalid line spacing: %f (min: %f, max: %f)", 
+            _LOGGER.error("Invalid line spacing: %f (min: %f, max: %f)",
                          value, self._attr_native_min_value, self._attr_native_max_value)
-
-    @property
-    def available(self) -> bool:
-        """Return True if entity is available."""
-        return True
 
 
 class iPIXELBrightness(NumberEntity, RestoreEntity):
@@ -195,8 +182,7 @@ class iPIXELBrightness(NumberEntity, RestoreEntity):
         self._attr_name = "Brightness"
         self._attr_unique_id = f"{address}_brightness"
         self._attr_native_value = 50  # Default brightness is 50%
-        self._attr_entity_description = "Display brightness level (1-100)"
-        
+
         self._attr_device_info = build_device_info(api, address, name)
 
     async def async_added_to_hass(self) -> None:
@@ -239,11 +225,6 @@ class iPIXELBrightness(NumberEntity, RestoreEntity):
                 _LOGGER.error("Error setting brightness: %s", err)
         else:
             _LOGGER.error("Invalid brightness: %d (must be 1-100)", brightness)
-
-    @property
-    def available(self) -> bool:
-        """Return True if entity is available."""
-        return True
 
 
 class iPIXELTextAnimation(NumberEntity, RestoreEntity):
@@ -298,29 +279,7 @@ class iPIXELTextAnimation(NumberEntity, RestoreEntity):
     async def async_set_native_value(self, value: float) -> None:
         """Set the animation."""
         self._attr_native_value = int(value)
-        await self._trigger_auto_update()
-
-    async def _trigger_auto_update(self) -> None:
-        """Trigger display update if auto-update is enabled and in text mode."""
-        try:
-            from .common import update_ipixel_display
-
-            mode_entity_id = f"select.{self._name.lower().replace(' ', '_')}_mode"
-            mode_state = self.hass.states.get(mode_entity_id) if mode_entity_id else None
-
-            if mode_state and mode_state.state == "text":
-                auto_update_entity_id = f"switch.{self._name.lower().replace(' ', '_')}_auto_update"
-                auto_update_state = self.hass.states.get(auto_update_entity_id) if auto_update_entity_id else None
-
-                if auto_update_state and auto_update_state.state == "on":
-                    await update_ipixel_display(self.hass, self._name, self._api)
-        except Exception as err:
-            _LOGGER.debug("Could not trigger auto-update: %s", err)
-
-    @property
-    def available(self) -> bool:
-        """Return True if entity is available."""
-        return True
+        await trigger_auto_update(self.hass, self._address, self._name, self._api, only_modes=("text",))
 
 
 class iPIXELTextSpeed(NumberEntity, RestoreEntity):
@@ -375,29 +334,7 @@ class iPIXELTextSpeed(NumberEntity, RestoreEntity):
     async def async_set_native_value(self, value: float) -> None:
         """Set the speed."""
         self._attr_native_value = int(value)
-        await self._trigger_auto_update()
-
-    async def _trigger_auto_update(self) -> None:
-        """Trigger display update if auto-update is enabled and in text mode."""
-        try:
-            from .common import update_ipixel_display
-
-            mode_entity_id = f"select.{self._name.lower().replace(' ', '_')}_mode"
-            mode_state = self.hass.states.get(mode_entity_id) if mode_entity_id else None
-
-            if mode_state and mode_state.state == "text":
-                auto_update_entity_id = f"switch.{self._name.lower().replace(' ', '_')}_auto_update"
-                auto_update_state = self.hass.states.get(auto_update_entity_id) if auto_update_entity_id else None
-
-                if auto_update_state and auto_update_state.state == "on":
-                    await update_ipixel_display(self.hass, self._name, self._api)
-        except Exception as err:
-            _LOGGER.debug("Could not trigger auto-update: %s", err)
-
-    @property
-    def available(self) -> bool:
-        """Return True if entity is available."""
-        return True
+        await trigger_auto_update(self.hass, self._address, self._name, self._api, only_modes=("text",))
 
 
 class iPIXELTextRainbow(NumberEntity, RestoreEntity):
@@ -452,26 +389,4 @@ class iPIXELTextRainbow(NumberEntity, RestoreEntity):
     async def async_set_native_value(self, value: float) -> None:
         """Set the rainbow mode."""
         self._attr_native_value = int(value)
-        await self._trigger_auto_update()
-
-    async def _trigger_auto_update(self) -> None:
-        """Trigger display update if auto-update is enabled and in text mode."""
-        try:
-            from .common import update_ipixel_display
-
-            mode_entity_id = f"select.{self._name.lower().replace(' ', '_')}_mode"
-            mode_state = self.hass.states.get(mode_entity_id) if mode_entity_id else None
-
-            if mode_state and mode_state.state == "text":
-                auto_update_entity_id = f"switch.{self._name.lower().replace(' ', '_')}_auto_update"
-                auto_update_state = self.hass.states.get(auto_update_entity_id) if auto_update_entity_id else None
-
-                if auto_update_state and auto_update_state.state == "on":
-                    await update_ipixel_display(self.hass, self._name, self._api)
-        except Exception as err:
-            _LOGGER.debug("Could not trigger auto-update: %s", err)
-
-    @property
-    def available(self) -> bool:
-        """Return True if entity is available."""
-        return True
+        await trigger_auto_update(self.hass, self._address, self._name, self._api, only_modes=("text",))
