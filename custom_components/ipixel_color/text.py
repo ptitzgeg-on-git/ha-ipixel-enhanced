@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import logging
-from typing import Any
 
 from homeassistant.components.text import TextEntity, TextMode
 from homeassistant.config_entries import ConfigEntry
@@ -58,8 +57,7 @@ class iPIXELTextDisplay(TextEntity, RestoreEntity):
         self._attr_name = "Display"
         self._attr_unique_id = f"{address}_text_display"
         self._current_text = ""
-        self._available = True
-        
+
         # Store current settings (could be exposed as additional entities later)
         self._effect = "scroll_ltr"  # Default to left-to-right scrolling
         self._speed = 50
@@ -82,13 +80,6 @@ class iPIXELTextDisplay(TextEntity, RestoreEntity):
     def native_value(self) -> str | None:
         """Return the current text value."""
         return self._current_text
-
-    @property
-    def available(self) -> bool:
-        """Return True if entity is available."""
-        # Always return True to allow reconnection attempts
-        # The actual connection state will be handled in the async_set_value method
-        return True
 
     async def async_set_value(self, value: str) -> None:
         """Set the text to display."""
@@ -135,19 +126,3 @@ class iPIXELTextDisplay(TextEntity, RestoreEntity):
         except Exception as err:
             _LOGGER.debug("Could not get auto-update setting: %s", err)
         return False  # Default to manual updates only
-
-    async def async_update(self) -> None:
-        """Update the entity state."""
-        try:
-            # Check connection status
-            if self._api.is_connected:
-                self._available = True
-            else:
-                self._available = False
-                _LOGGER.debug("Device not connected, marking as unavailable")
-                
-        except Exception as err:
-            _LOGGER.error("Error updating entity state: %s", err)
-            self._available = False
-
-

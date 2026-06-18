@@ -2,22 +2,23 @@
 from __future__ import annotations
 
 import logging
-import os
-from pathlib import Path
-from typing import Any
 
 from homeassistant.components.select import SelectEntity
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.entity import EntityCategory
+from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.restore_state import RestoreEntity
 
 from .api import iPIXELAPI
 from .const import DOMAIN, CONF_ADDRESS, CONF_NAME, AVAILABLE_MODES, DEFAULT_MODE
-from .common import get_entity_id_by_unique_id
-from .common import update_ipixel_display, build_device_info
+from .common import trigger_auto_update, build_device_info
 from .fonts import get_available_fonts
+from .pages import SIGNAL_LIBRARY_UPDATED
+
+# Shown in the Playlist / Show Page selects to mean "nothing selected / stop".
+NONE_OPTION = "(none)"
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -38,7 +39,132 @@ async def async_setup_entry(
         iPIXELModeSelect(hass, api, entry, address, name),
         iPIXELClockStyleSelect(hass, api, entry, address, name),
         iPIXELOrientationSelect(api, entry, address, name),
+        iPIXELPlaylistSelect(hass, api, entry, address, name),
+        iPIXELPageSelect(hass, api, entry, address, name),
     ])
+
+
+class iPIXELPlaylistSelect(SelectEntity):
+    """Pick which saved playlist runs on this panel ((none) = stop).
+
+    Options are the playlists you build in the iPIXEL Studio and refresh live.
+    Usable from automations (select.select_option) with a real name dropdown,
+    instead of typing the name into the start_playlist service.
+    """
+
+    _attr_has_entity_name = True
+    _attr_icon = "mdi:playlist-play"
+
+    def __init__(self, hass: HomeAssistant, api: iPIXELAPI, entry: ConfigEntry, address: str, name: str) -> None:
+        self.hass = hass
+        self._api = api
+        self._entry = entry
+        self._address = address
+        self._name = name
+        self._attr_name = "Playlist"
+        self._attr_unique_id = f"{address}_playlist_select"
+        self._attr_options = [NONE_OPTION]
+        self._attr_current_option = NONE_OPTION
+        self._attr_device_info = build_device_info(api, address, name)
+
+    def _store(self):
+        return self.hass.data.get(f"{DOMAIN}_store")
+
+    def _runner(self):
+        return self.hass.data.get(f"{DOMAIN}_runner")
+
+    @callback
+    def _refresh(self) -> None:
+        store = self._store()
+        if not store:
+            return
+        self._attr_options = [NONE_OPTION] + sorted(store.playlists)
+        active = store.running_on(self._entry.entry_id)
+        self._attr_current_option = active if active in store.playlists else NONE_OPTION
+        self.async_write_ha_state()
+
+    async def async_added_to_hass(self) -> None:
+        await super().async_added_to_hass()
+        self.async_on_remove(
+            async_dispatcher_connect(self.hass, SIGNAL_LIBRARY_UPDATED, self._refresh)
+        )
+        self._refresh()
+
+    async def async_select_option(self, option: str) -> None:
+        store, runner = self._store(), self._runner()
+        if not store:
+            return
+        entry_id = self._entry.entry_id
+        if option == NONE_OPTION:
+            await store.stop_playlist(entry_id)
+            if runner:
+                runner.stop(entry_id)
+        else:
+            if not await store.start_named_playlist(option, [entry_id]):
+                _LOGGER.error("Unknown playlist: %s", option)
+                return
+            if runner:
+                runner.restart_one(entry_id)
+        self._attr_current_option = option
+        self.async_write_ha_state()
+
+
+class iPIXELPageSelect(SelectEntity):
+    """Show a saved page on the panel by picking its name ((none) = no-op).
+
+    Options are the pages saved in the iPIXEL Studio and refresh live, so you
+    can recall a saved page from an automation without retyping its name.
+    """
+
+    _attr_has_entity_name = True
+    _attr_icon = "mdi:image-multiple"
+
+    def __init__(self, hass: HomeAssistant, api: iPIXELAPI, entry: ConfigEntry, address: str, name: str) -> None:
+        self.hass = hass
+        self._api = api
+        self._entry = entry
+        self._address = address
+        self._name = name
+        self._attr_name = "Show Page"
+        self._attr_unique_id = f"{address}_page_select"
+        self._attr_options = [NONE_OPTION]
+        self._attr_current_option = NONE_OPTION
+        self._attr_device_info = build_device_info(api, address, name)
+
+    def _store(self):
+        return self.hass.data.get(f"{DOMAIN}_store")
+
+    @callback
+    def _refresh(self) -> None:
+        store = self._store()
+        if not store:
+            return
+        options = [NONE_OPTION] + sorted(store.pages)
+        self._attr_options = options
+        if self._attr_current_option not in options:
+            self._attr_current_option = NONE_OPTION
+        self.async_write_ha_state()
+
+    async def async_added_to_hass(self) -> None:
+        await super().async_added_to_hass()
+        self.async_on_remove(
+            async_dispatcher_connect(self.hass, SIGNAL_LIBRARY_UPDATED, self._refresh)
+        )
+        self._refresh()
+
+    async def async_select_option(self, option: str) -> None:
+        store = self._store()
+        if not store or option == NONE_OPTION:
+            self._attr_current_option = NONE_OPTION
+            self.async_write_ha_state()
+            return
+        page = store.pages.get(option)
+        if page is None:
+            _LOGGER.error("Unknown page: %s", option)
+            return
+        await self._api.display_widgets(page)
+        self._attr_current_option = option
+        self.async_write_ha_state()
 
 
 ORIENTATION_OPTIONS = {"0°": 0, "90°": 1, "180°": 2, "270°": 3}
@@ -66,10 +192,6 @@ class iPIXELOrientationSelect(SelectEntity, RestoreEntity):
         last_state = await self.async_get_last_state()
         if last_state is not None and last_state.state in ORIENTATION_OPTIONS:
             self._attr_current_option = last_state.state
-
-    @property
-    def available(self) -> bool:
-        return True
 
     async def async_select_option(self, option: str) -> None:
         if option not in ORIENTATION_OPTIONS:
@@ -103,7 +225,6 @@ class iPIXELFontSelect(SelectEntity, RestoreEntity):
         self._name = name
         self._attr_name = "Font"
         self._attr_unique_id = f"{address}_font_select"
-        self._attr_entity_description = "Select font for text display"
 
         # Get available fonts from all locations
         self._attr_options = get_available_fonts()
@@ -131,30 +252,9 @@ class iPIXELFontSelect(SelectEntity, RestoreEntity):
         if option in self._attr_options:
             self._attr_current_option = option
             _LOGGER.debug("Font changed to: %s", option)
-            
-            # Trigger display update if auto-update is enabled
-            await self._trigger_auto_update()
+            await trigger_auto_update(self.hass, self._address, self._name, self._api)
         else:
             _LOGGER.error("Invalid font option: %s", option)
-
-    async def _trigger_auto_update(self) -> None:
-        """Trigger display update if auto-update is enabled."""
-        try:
-            # Check auto-update setting
-            auto_update_entity_id = get_entity_id_by_unique_id(self.hass, self._address, "auto_update", "switch")
-            auto_update_state = self.hass.states.get(auto_update_entity_id) if auto_update_entity_id else None
-            
-            if auto_update_state and auto_update_state.state == "on":
-                # Use common update function directly
-                await update_ipixel_display(self.hass, self._name, self._api)
-                _LOGGER.debug("Auto-update triggered display refresh due to font change")
-        except Exception as err:
-            _LOGGER.debug("Could not trigger auto-update: %s", err)
-
-    @property
-    def available(self) -> bool:
-        """Return True if entity is available."""
-        return True
 
 
 class iPIXELModeSelect(SelectEntity, RestoreEntity):
@@ -178,7 +278,6 @@ class iPIXELModeSelect(SelectEntity, RestoreEntity):
         self._name = name
         self._attr_name = "Mode"
         self._attr_unique_id = f"{address}_mode_select"
-        self._attr_entity_description = "Select display mode (textimage, clock, rhythm, fun)"
 
         # Set available mode options
         self._attr_options = AVAILABLE_MODES
@@ -206,30 +305,9 @@ class iPIXELModeSelect(SelectEntity, RestoreEntity):
         if option in self._attr_options:
             self._attr_current_option = option
             _LOGGER.info("Mode changed to: %s", option)
-
-            # Trigger display update if auto-update is enabled
-            await self._trigger_auto_update()
+            await trigger_auto_update(self.hass, self._address, self._name, self._api)
         else:
             _LOGGER.error("Invalid mode option: %s", option)
-
-    async def _trigger_auto_update(self) -> None:
-        """Trigger display update if auto-update is enabled."""
-        try:
-            # Check auto-update setting
-            auto_update_entity_id = get_entity_id_by_unique_id(self.hass, self._address, "auto_update", "switch")
-            auto_update_state = self.hass.states.get(auto_update_entity_id) if auto_update_entity_id else None
-
-            if auto_update_state and auto_update_state.state == "on":
-                # Use common update function directly
-                await update_ipixel_display(self.hass, self._name, self._api)
-                _LOGGER.debug("Auto-update triggered display refresh due to mode change")
-        except Exception as err:
-            _LOGGER.debug("Could not trigger auto-update: %s", err)
-
-    @property
-    def available(self) -> bool:
-        """Return True if entity is available."""
-        return True
 
 
 class iPIXELClockStyleSelect(SelectEntity, RestoreEntity):
@@ -254,7 +332,6 @@ class iPIXELClockStyleSelect(SelectEntity, RestoreEntity):
         self._name = name
         self._attr_name = "Clock Style"
         self._attr_unique_id = f"{address}_clock_style_select"
-        self._attr_entity_description = "Select clock display style (0-8)"
 
         # Clock styles 0-8
         self._attr_options = ["0", "1", "2", "3", "4", "5", "6", "7", "8"]
@@ -282,32 +359,8 @@ class iPIXELClockStyleSelect(SelectEntity, RestoreEntity):
         if option in self._attr_options:
             self._attr_current_option = option
             _LOGGER.info("Clock style changed to: %s", option)
-
-            # Trigger display update if auto-update is enabled and in clock mode
-            await self._trigger_auto_update()
+            await trigger_auto_update(
+                self.hass, self._address, self._name, self._api, only_modes=("clock",)
+            )
         else:
             _LOGGER.error("Invalid clock style option: %s", option)
-
-    async def _trigger_auto_update(self) -> None:
-        """Trigger display update if auto-update is enabled and in clock mode."""
-        try:
-            # Check if we're in clock mode
-            mode_entity_id = get_entity_id_by_unique_id(self.hass, self._address, "mode_select", "select")
-            mode_state = self.hass.states.get(mode_entity_id) if mode_entity_id else None
-
-            if mode_state and mode_state.state == "clock":
-                # Check auto-update setting
-                auto_update_entity_id = get_entity_id_by_unique_id(self.hass, self._address, "auto_update", "switch")
-                auto_update_state = self.hass.states.get(auto_update_entity_id) if auto_update_entity_id else None
-
-                if auto_update_state and auto_update_state.state == "on":
-                    # Use common update function directly
-                    await update_ipixel_display(self.hass, self._name, self._api)
-                    _LOGGER.debug("Auto-update triggered display refresh due to clock style change")
-        except Exception as err:
-            _LOGGER.debug("Could not trigger auto-update: %s", err)
-
-    @property
-    def available(self) -> bool:
-        """Return True if entity is available."""
-        return True

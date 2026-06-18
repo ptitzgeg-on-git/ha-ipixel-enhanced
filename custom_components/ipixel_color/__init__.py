@@ -10,7 +10,12 @@ from homeassistant.exceptions import ConfigEntryNotReady, HomeAssistantError
 from homeassistant.helpers import device_registry as dr
 from .api import iPIXELAPI, iPIXELConnectionError, iPIXELTimeoutError
 from .const import DOMAIN, CONF_ADDRESS, CONF_NAME
-from .pages import PageStore, PlaylistRunner
+from .pages import (
+    PageStore,
+    PlaylistRunner,
+    device_api_entry_ids,
+    resolve_targets,
+)
 from . import web as ipixel_web
 
 STORE_DATA = f"{DOMAIN}_store"
@@ -89,6 +94,17 @@ SET_PLAYLIST_SCHEMA = vol.Schema({
     vol.Optional("device_id"): vol.Any(None, str, [str]),
 })
 
+SERVICE_START_PLAYLIST = "start_playlist"
+START_PLAYLIST_SCHEMA = vol.Schema({
+    vol.Required("name"): str,
+    vol.Optional("device_id"): vol.Any(None, str, [str]),
+})
+
+SERVICE_STOP_PLAYLIST = "stop_playlist"
+STOP_PLAYLIST_SCHEMA = vol.Schema({
+    vol.Optional("device_id"): vol.Any(None, str, [str]),
+})
+
 SERVICE_SET_PROGRAM = "set_program"
 SET_PROGRAM_SCHEMA = vol.Schema({
     vol.Optional("device_id"): vol.Any(None, str, [str]),
@@ -119,9 +135,9 @@ SHOW_TEXT_SCHEMA = vol.Schema({
     vol.Optional("device_id"): vol.Any(None, str, [str]),
     vol.Optional("color", default="ffffff"): str,
     vol.Optional("bg_color", default="000000"): vol.Any(None, str),
-    vol.Optional("animation", default=1): vol.All(int, vol.Range(min=0, max=10)),
+    vol.Optional("animation", default=1): vol.All(int, vol.Range(min=0, max=7)),
     vol.Optional("speed", default=60): vol.All(int, vol.Range(min=0, max=100)),
-    vol.Optional("rainbow", default=0): vol.All(int, vol.Range(min=0, max=3)),
+    vol.Optional("rainbow", default=0): vol.All(int, vol.Range(min=0, max=9)),
 })
 
 SERVICE_SHOW_EMOJI = "show_emoji"
@@ -224,17 +240,67 @@ async def _handle_rhythm_levels(hass: HomeAssistant, call: ServiceCall) -> None:
     )
 
 
+def _resolve_playlist_targets(hass: HomeAssistant, store: PageStore, name: str, raw):
+    """Pick the panels a start_playlist call should play on.
+
+    Priority: the call's device_id, then the playlist's saved targets, then all
+    connected panels (so single-panel setups "just work").
+    """
+    targets = resolve_targets(hass, raw)
+    if not targets:
+        pl = store.playlists.get(name) or {}
+        targets = resolve_targets(hass, pl.get("targets"))
+    if not targets:
+        targets = device_api_entry_ids(hass)
+    return targets
+
+
 async def _handle_set_playlist(hass: HomeAssistant, call: ServiceCall) -> None:
+    """Legacy enable/disable shim mapped onto the per-device model."""
     store: PageStore | None = hass.data.get(STORE_DATA)
     runner: PlaylistRunner | None = hass.data.get(RUNNER_DATA)
     if not store:
         raise HomeAssistantError("Page store not ready")
-    playlist = dict(store.playlist)
-    playlist["enabled"] = call.data["enable"]
     raw = call.data.get("device_id")
-    if raw:
-        playlist["target"] = raw[0] if isinstance(raw, list) else raw
-    await store.set_playlist(playlist)
+    if not call.data["enable"]:
+        for entry_id in (resolve_targets(hass, raw) or device_api_entry_ids(hass)):
+            await store.stop_playlist(entry_id)
+        if runner:
+            runner.restart()
+        return
+    # enable=True needs a playlist name; with the named model use start_playlist.
+    raise HomeAssistantError(
+        "set_playlist only stops playback now — use start_playlist with a name to start one."
+    )
+
+
+async def _handle_start_playlist(hass: HomeAssistant, call: ServiceCall) -> None:
+    store: PageStore | None = hass.data.get(STORE_DATA)
+    runner: PlaylistRunner | None = hass.data.get(RUNNER_DATA)
+    if not store:
+        raise HomeAssistantError("Page store not ready")
+    name = call.data["name"]
+    if name not in store.playlists:
+        known = ", ".join(sorted(store.playlists)) or "(none)"
+        raise HomeAssistantError(f"Unknown playlist '{name}'. Saved playlists: {known}")
+    targets = _resolve_playlist_targets(hass, store, name, call.data.get("device_id"))
+    if not await store.start_named_playlist(name, targets):
+        raise HomeAssistantError(f"No panel available to play '{name}' on.")
+    if runner:
+        runner.restart()
+
+
+async def _handle_stop_playlist(hass: HomeAssistant, call: ServiceCall) -> None:
+    store: PageStore | None = hass.data.get(STORE_DATA)
+    runner: PlaylistRunner | None = hass.data.get(RUNNER_DATA)
+    if not store:
+        raise HomeAssistantError("Page store not ready")
+    targets = resolve_targets(hass, call.data.get("device_id"))
+    if targets:
+        for entry_id in targets:
+            await store.stop_playlist(entry_id)
+    else:
+        await store.stop_playlist()
     if runner:
         runner.restart()
 
@@ -403,6 +469,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         (SERVICE_RHYTHM_ANIMATION, _handle_rhythm_animation, RHYTHM_ANIMATION_SCHEMA),
         (SERVICE_RHYTHM_LEVELS, _handle_rhythm_levels, RHYTHM_LEVELS_SCHEMA),
         (SERVICE_SET_PLAYLIST, _handle_set_playlist, SET_PLAYLIST_SCHEMA),
+        (SERVICE_START_PLAYLIST, _handle_start_playlist, START_PLAYLIST_SCHEMA),
+        (SERVICE_STOP_PLAYLIST, _handle_stop_playlist, STOP_PLAYLIST_SCHEMA),
         (SERVICE_SET_PROGRAM, _handle_set_program, SET_PROGRAM_SCHEMA),
         (SERVICE_SET_PIXEL, _handle_set_pixel, SET_PIXEL_SCHEMA),
         (SERVICE_SHOW_CLOCK, _handle_show_clock, SHOW_CLOCK_SCHEMA),
@@ -432,11 +500,10 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             await api.disconnect()
         except Exception as err:
             _LOGGER.error("Error disconnecting: %s", err)
-        # No devices left -> stop the playlist loop.
-        remaining = [v for v in hass.data.get(DOMAIN, {}).values() if hasattr(v, "display_widgets")]
+        # Stop just this panel's playlist loop (others keep running).
         runner: PlaylistRunner | None = hass.data.get(RUNNER_DATA)
-        if runner and not remaining:
-            runner.stop()
+        if runner:
+            runner.stop(entry.entry_id)
     return unload_ok
 
 

@@ -13,8 +13,7 @@ from homeassistant.helpers.restore_state import RestoreEntity
 
 from .api import iPIXELAPI, iPIXELConnectionError
 from .const import DOMAIN, CONF_ADDRESS, CONF_NAME
-from .common import get_entity_id_by_unique_id
-from .common import update_ipixel_display, build_device_info
+from .common import trigger_auto_update, build_device_info
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -60,7 +59,6 @@ class iPIXELSwitch(SwitchEntity):
         self._attr_name = "Power"
         self._attr_unique_id = f"{address}_power"
         self._is_on = False
-        self._available = True
 
         self._attr_device_info = build_device_info(api, address, name)
 
@@ -68,13 +66,6 @@ class iPIXELSwitch(SwitchEntity):
     def is_on(self) -> bool:
         """Return True if entity is on."""
         return self._is_on
-
-    @property
-    def available(self) -> bool:
-        """Return True if entity is available."""
-        # Always return True to allow reconnection attempts
-        # The actual connection state will be handled in the turn_on/turn_off methods
-        return True
 
     async def async_turn_on(self, **kwargs: Any) -> None:
         """Turn the entity on."""
@@ -117,20 +108,9 @@ class iPIXELSwitch(SwitchEntity):
             _LOGGER.error("Unexpected error while turning off: %s", err)
 
     async def async_update(self) -> None:
-        """Update the entity state."""
-        try:
-            # Check connection status
-            if self._api.is_connected:
-                self._available = True
-                # In this basic version, we use the API's cached power state
-                self._is_on = self._api.power_state
-            else:
-                self._available = False
-                _LOGGER.debug("Device not connected, marking as unavailable")
-                
-        except Exception as err:
-            _LOGGER.error("Error updating entity state: %s", err)
-            self._available = False
+        """Sync the cached power state from the API when connected."""
+        if self._api.is_connected:
+            self._is_on = self._api.power_state
 
 
 class iPIXELAntialiasingSwitch(SwitchEntity, RestoreEntity):
@@ -154,7 +134,6 @@ class iPIXELAntialiasingSwitch(SwitchEntity, RestoreEntity):
         self._name = name
         self._attr_name = "Antialiasing"
         self._attr_unique_id = f"{address}_antialiasing"
-        self._attr_entity_description = "Enable text antialiasing for smooth text (disable for sharp pixels)"
         self._is_on = True  # Default to antialiasing enabled
 
         self._attr_device_info = build_device_info(api, address, name)
@@ -173,11 +152,6 @@ class iPIXELAntialiasingSwitch(SwitchEntity, RestoreEntity):
     def is_on(self) -> bool:
         """Return True if antialiasing is enabled."""
         return self._is_on
-
-    @property
-    def available(self) -> bool:
-        """Return True if entity is available."""
-        return True
 
     async def async_turn_on(self, **kwargs: Any) -> None:
         """Enable antialiasing."""
@@ -211,7 +185,6 @@ class iPIXELAutoUpdateSwitch(SwitchEntity, RestoreEntity):
         self._name = name
         self._attr_name = "Auto Update"
         self._attr_unique_id = f"{address}_auto_update"
-        self._attr_entity_description = "Automatically update display when text or settings change"
         self._is_on = False  # Default to manual updates only
 
         self._attr_device_info = build_device_info(api, address, name)
@@ -230,11 +203,6 @@ class iPIXELAutoUpdateSwitch(SwitchEntity, RestoreEntity):
     def is_on(self) -> bool:
         """Return True if auto-update is enabled."""
         return self._is_on
-
-    @property
-    def available(self) -> bool:
-        """Return True if entity is available."""
-        return True
 
     async def async_turn_on(self, **kwargs: Any) -> None:
         """Enable auto-update."""
@@ -271,10 +239,6 @@ class iPIXELFunModeSwitch(SwitchEntity):
     def is_on(self) -> bool:
         return self._api.fun_mode
 
-    @property
-    def available(self) -> bool:
-        return True
-
     async def async_turn_on(self, **kwargs: Any) -> None:
         if not self._api.is_connected:
             await self._api.connect()
@@ -309,7 +273,6 @@ class iPIXELClock24HSwitch(SwitchEntity, RestoreEntity):
         self._name = name
         self._attr_name = "Clock 24h"
         self._attr_unique_id = f"{address}_clock_24h"
-        self._attr_entity_description = "Use 24-hour format for clock display"
         self._is_on = True  # Default to 24h format
 
         self._attr_device_info = build_device_info(api, address, name)
@@ -329,40 +292,17 @@ class iPIXELClock24HSwitch(SwitchEntity, RestoreEntity):
         """Return True if 24h format is enabled."""
         return self._is_on
 
-    @property
-    def available(self) -> bool:
-        """Return True if entity is available."""
-        return True
-
     async def async_turn_on(self, **kwargs: Any) -> None:
         """Enable 24h format."""
         self._is_on = True
         _LOGGER.debug("Clock 24h format enabled")
-        await self._trigger_auto_update()
+        await trigger_auto_update(self.hass, self._address, self._name, self._api, only_modes=("clock",))
 
     async def async_turn_off(self, **kwargs: Any) -> None:
         """Disable 24h format (use 12h)."""
         self._is_on = False
         _LOGGER.debug("Clock 12h format enabled")
-        await self._trigger_auto_update()
-
-    async def _trigger_auto_update(self) -> None:
-        """Trigger display update if auto-update is enabled and in clock mode."""
-        try:
-            # Check if we're in clock mode
-            mode_entity_id = get_entity_id_by_unique_id(self.hass, self._address, "mode_select", "select")
-            mode_state = self.hass.states.get(mode_entity_id) if mode_entity_id else None
-
-            if mode_state and mode_state.state == "clock":
-                # Check auto-update setting
-                auto_update_entity_id = get_entity_id_by_unique_id(self.hass, self._address, "auto_update", "switch")
-                auto_update_state = self.hass.states.get(auto_update_entity_id) if auto_update_entity_id else None
-
-                if auto_update_state and auto_update_state.state == "on":
-                    await update_ipixel_display(self.hass, self._name, self._api)
-                    _LOGGER.debug("Auto-update triggered due to clock 24h change")
-        except Exception as err:
-            _LOGGER.debug("Could not trigger auto-update: %s", err)
+        await trigger_auto_update(self.hass, self._address, self._name, self._api, only_modes=("clock",))
 
 
 class iPIXELClockShowDateSwitch(SwitchEntity, RestoreEntity):
@@ -388,7 +328,6 @@ class iPIXELClockShowDateSwitch(SwitchEntity, RestoreEntity):
         self._name = name
         self._attr_name = "Clock Show Date"
         self._attr_unique_id = f"{address}_clock_show_date"
-        self._attr_entity_description = "Show date alongside time in clock display"
         self._is_on = True  # Default to showing date
 
         self._attr_device_info = build_device_info(api, address, name)
@@ -408,37 +347,14 @@ class iPIXELClockShowDateSwitch(SwitchEntity, RestoreEntity):
         """Return True if show date is enabled."""
         return self._is_on
 
-    @property
-    def available(self) -> bool:
-        """Return True if entity is available."""
-        return True
-
     async def async_turn_on(self, **kwargs: Any) -> None:
         """Enable showing date."""
         self._is_on = True
         _LOGGER.debug("Clock show date enabled")
-        await self._trigger_auto_update()
+        await trigger_auto_update(self.hass, self._address, self._name, self._api, only_modes=("clock",))
 
     async def async_turn_off(self, **kwargs: Any) -> None:
         """Disable showing date."""
         self._is_on = False
         _LOGGER.debug("Clock show date disabled")
-        await self._trigger_auto_update()
-
-    async def _trigger_auto_update(self) -> None:
-        """Trigger display update if auto-update is enabled and in clock mode."""
-        try:
-            # Check if we're in clock mode
-            mode_entity_id = get_entity_id_by_unique_id(self.hass, self._address, "mode_select", "select")
-            mode_state = self.hass.states.get(mode_entity_id) if mode_entity_id else None
-
-            if mode_state and mode_state.state == "clock":
-                # Check auto-update setting
-                auto_update_entity_id = get_entity_id_by_unique_id(self.hass, self._address, "auto_update", "switch")
-                auto_update_state = self.hass.states.get(auto_update_entity_id) if auto_update_entity_id else None
-
-                if auto_update_state and auto_update_state.state == "on":
-                    await update_ipixel_display(self.hass, self._name, self._api)
-                    _LOGGER.debug("Auto-update triggered due to clock show date change")
-        except Exception as err:
-            _LOGGER.debug("Could not trigger auto-update: %s", err)
+        await trigger_auto_update(self.hass, self._address, self._name, self._api, only_modes=("clock",))

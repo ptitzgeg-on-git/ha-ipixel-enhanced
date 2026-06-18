@@ -1,0 +1,4 @@
+# Test-only dependencies. The integration itself declares its runtime deps in
+# manifest.json. These let the pure-logic suite run without Home Assistant.
+pytest>=8.0
+pillow>=10.0

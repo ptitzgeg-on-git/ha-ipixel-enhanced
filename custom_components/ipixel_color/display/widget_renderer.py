@@ -46,6 +46,13 @@ DEFAULT_FONT = "Tiny5"
 DEFAULT_FONT_SIZE = 8
 EMOJI_DOWNLOAD_TIMEOUT = 10
 
+# Animated GIF rendering. A page that contains an animated "gif" widget is
+# rendered as a multi-frame GIF (the panel plays every frame natively); a page
+# without one stays a single PNG. These bounds keep the BLE upload sane.
+DEFAULT_FRAME_MS = 100
+MIN_FRAME_MS = 40
+MAX_ANIM_FRAMES = 60
+
 ANCHORS = {
     "top_left", "top_center", "top_right",
     "center_left", "center", "center_right",
@@ -182,7 +189,7 @@ async def _prefetch_assets(hass: HomeAssistant, widgets: list[dict]) -> dict[int
             if emoji:
                 indices.append(i)
                 tasks.append(fetch_emoji_png(hass, _emoji_codepoint(emoji)))
-        elif wtype == "image":
+        elif wtype in ("image", "gif"):
             src = (w.get("src") or "").strip()
             if src.startswith(("http://", "https://")):
                 indices.append(i)
@@ -281,6 +288,24 @@ def _draw_emoji(canvas, draw, w, asset, cw, ch):
     canvas.paste(img, (px, py), img)
 
 
+def _fit_image(img, iw, ih, fit):
+    """Resize an RGBA image into an iw×ih box per the fit mode (shared by the
+    static image widget and the per-frame GIF widget)."""
+    fit = str(fit or "contain").lower()
+    if fit == "cover":
+        scale = max(iw / img.width, ih / img.height)
+        img = img.resize((max(1, int(img.width * scale)), max(1, int(img.height * scale))), Image.LANCZOS)
+        left = (img.width - iw) // 2
+        top = (img.height - ih) // 2
+        img = img.crop((left, top, left + iw, top + ih))
+    elif fit == "stretch":
+        img = img.resize((max(1, iw), max(1, ih)), Image.LANCZOS)
+    else:  # contain
+        img = img.copy()
+        img.thumbnail((max(1, iw), max(1, ih)), Image.LANCZOS)
+    return img
+
+
 def _draw_image(canvas, draw, w, asset, cw, ch):
     if not asset:
         return
@@ -291,18 +316,64 @@ def _draw_image(canvas, draw, w, asset, cw, ch):
         return
     iw = int(w.get("width", img.width) or img.width)
     ih = int(w.get("height", img.height) or img.height)
-    fit = str(w.get("fit", "contain")).lower()
-    if fit == "cover":
-        scale = max(iw / img.width, ih / img.height)
-        img = img.resize((max(1, int(img.width * scale)), max(1, int(img.height * scale))), Image.LANCZOS)
-        left = (img.width - iw) // 2
-        top = (img.height - ih) // 2
-        img = img.crop((left, top, left + iw, top + ih))
-    elif fit == "stretch":
-        img = img.resize((iw, ih), Image.LANCZOS)
-    else:  # contain
-        img.thumbnail((iw, ih), Image.LANCZOS)
+    img = _fit_image(img, iw, ih, w.get("fit", "contain"))
     px, py = _resolve_position(w, img.width, img.height, cw, ch)
+    canvas.paste(img, (px, py), img)
+
+
+def _prepare_gif(asset, w, cw, ch):
+    """Decode a GIF asset into placed, fitted RGBA frames.
+
+    Returns (frames, (px, py)) where frames is a list of (image, duration_ms),
+    or None if the asset can't be decoded. Same positioning/fit knobs as the
+    image widget, so a GIF behaves exactly like an image — it just animates.
+    """
+    try:
+        src = Image.open(io.BytesIO(asset))
+    except Exception as err:  # noqa: BLE001
+        _LOGGER.warning("GIF decode failed: %s", err)
+        return None
+    iw = int(w.get("width", src.width) or src.width)
+    ih = int(w.get("height", src.height) or src.height)
+    fit = w.get("fit", "contain")
+    frames: list[tuple] = []
+    try:
+        n_frames = int(getattr(src, "n_frames", 1) or 1)
+    except Exception:  # noqa: BLE001
+        n_frames = 1
+    for idx in range(n_frames):
+        try:
+            src.seek(idx)
+        except EOFError:
+            break
+        try:
+            dur = int(src.info.get("duration", DEFAULT_FRAME_MS) or DEFAULT_FRAME_MS)
+        except (TypeError, ValueError):
+            dur = DEFAULT_FRAME_MS
+        fitted = _fit_image(src.convert("RGBA"), iw, ih, fit)
+        frames.append((fitted, max(MIN_FRAME_MS, dur)))
+    if not frames:
+        return None
+    fw, fh = frames[0][0].size
+    px, py = _resolve_position(w, fw, fh, cw, ch)
+    return frames, (px, py)
+
+
+def _draw_gif(canvas, draw, w, prepared, cw, ch, t_ms):
+    """Paste the GIF frame active at time t_ms (loops via modulo)."""
+    if not prepared:
+        return
+    frames, (px, py) = prepared
+    total = sum(d for _, d in frames)
+    img = frames[0][0]
+    if total > 0:
+        t = t_ms % total
+        acc = 0
+        for fimg, d in frames:
+            acc += d
+            if t < acc:
+                img = fimg
+                break
     canvas.paste(img, (px, py), img)
 
 
@@ -350,6 +421,36 @@ def _draw_progress(canvas, draw, w, cw, ch):
         draw.rectangle([px, py, px + fill_w - 1, py + rh - 1], fill=fg)
 
 
+def _draw_native_clock(canvas, draw, w, cw, ch):
+    """Preview stand-in for the native_clock widget. The real clock is drawn by
+    the panel firmware (see api.display_widgets); here we just show the current
+    time so the designer preview isn't blank."""
+    now = datetime.now()
+    fmt = "%H:%M" if _truthy(w.get("format_24", True)) else "%I:%M"
+    show_date = _truthy(w.get("show_date", True))
+    time_w = dict(w)
+    time_w.update({"text": now.strftime(fmt), "anchor": "center",
+                   "color": "ffffff", "font": "Tiny5", "size": 8,
+                   "dy": -4 if show_date else 0})
+    _draw_text(canvas, draw, time_w, cw, ch)
+    if show_date:
+        date_w = dict(w)
+        date_w.update({"text": now.strftime("%d/%m"), "anchor": "center",
+                       "color": "888888", "font": "Tiny5", "size": 8, "dy": 5})
+        _draw_text(canvas, draw, date_w, cw, ch)
+
+
+def _draw_native_text(canvas, draw, w, cw, ch):
+    """Preview stand-in for the native_text widget. The real text scrolls/animates
+    on the panel via its built-in text engine (see api.display_widgets); here we
+    just draw it statically so the designer preview isn't blank."""
+    tw = dict(w)
+    tw.setdefault("anchor", "center")
+    tw.setdefault("font", "Tiny5")
+    tw.setdefault("size", 8)
+    _draw_text(canvas, draw, tw, cw, ch)
+
+
 def _draw_clock(canvas, draw, w, cw, ch):
     fmt = str(w.get("format", "%H:%M"))
     try:
@@ -361,10 +462,12 @@ def _draw_clock(canvas, draw, w, cw, ch):
     _draw_text(canvas, draw, cw_widget, cw, ch)
 
 
-_DRAWERS_NEEDING_ASSET = {"emoji", "image"}
+def _compose_frame(page, assets, gif_prepared, width, height, t_ms):
+    """Composite every widget onto one RGB canvas at animation time t_ms.
 
-
-def _render_canvas(page: dict, assets: dict[int, bytes], width: int, height: int) -> bytes:
+    GIF widgets show the frame active at t_ms; all other widgets are identical
+    on every frame. Widgets are drawn in list order so z-order is preserved.
+    """
     bg = parse_color(page.get("background", page.get("bg", "000000")), (0, 0, 0))
     canvas = Image.new("RGB", (width, height), bg)
     draw = ImageDraw.Draw(canvas)
@@ -381,6 +484,8 @@ def _render_canvas(page: dict, assets: dict[int, bytes], width: int, height: int
                 _draw_emoji(canvas, draw, w, assets.get(i), width, height)
             elif wtype == "image":
                 _draw_image(canvas, draw, w, assets.get(i), width, height)
+            elif wtype == "gif":
+                _draw_gif(canvas, draw, w, gif_prepared.get(i), width, height, t_ms)
             elif wtype == "line":
                 _draw_line(canvas, draw, w, width, height)
             elif wtype in ("rect", "rectangle", "box"):
@@ -389,22 +494,101 @@ def _render_canvas(page: dict, assets: dict[int, bytes], width: int, height: int
                 _draw_progress(canvas, draw, w, width, height)
             elif wtype == "clock":
                 _draw_clock(canvas, draw, w, width, height)
+            elif wtype == "native_clock":
+                _draw_native_clock(canvas, draw, w, width, height)
+            elif wtype == "native_text":
+                _draw_native_text(canvas, draw, w, width, height)
             else:
                 _LOGGER.warning("Unknown widget type: %s", wtype)
         except Exception as err:  # noqa: BLE001 - one bad widget shouldn't blank the page
             _LOGGER.warning("Widget %d (%s) failed: %s", i, wtype, err)
+    return canvas
+
+
+def _render_canvas(page: dict, assets: dict[int, bytes], width: int, height: int) -> bytes:
+    """Render a single static frame to PNG bytes (kept for the offline harness)."""
+    canvas = _compose_frame(page, assets, {}, width, height, 0)
     out = io.BytesIO()
     canvas.save(out, format="PNG")
     return out.getvalue()
 
 
-async def render_page_to_png(
+def _build_timeline(gif_prepared):
+    """Merge every GIF's frame boundaries into one timeline.
+
+    Returns (timestamps_ms, durations_ms). The loop length is the longest GIF;
+    shorter GIFs repeat (handled by _draw_gif's modulo). Frame count is capped
+    by even resampling so a long/fast GIF can't flood the BLE upload.
+    """
+    loops = [sum(d for _, d in frames) for frames, _ in gif_prepared.values() if frames]
+    total = max([t for t in loops if t > 0], default=DEFAULT_FRAME_MS)
+    boundaries = {0}
+    for frames, _ in gif_prepared.values():
+        acc = 0
+        while acc < total:
+            for _, d in frames:
+                boundaries.add(acc)
+                acc += d
+                if acc >= total:
+                    break
+    times = sorted(t for t in boundaries if t < total)
+    if len(times) > MAX_ANIM_FRAMES:
+        step = len(times) / MAX_ANIM_FRAMES
+        times = [times[int(i * step)] for i in range(MAX_ANIM_FRAMES)]
+    durations = []
+    for i, t in enumerate(times):
+        nxt = times[i + 1] if i + 1 < len(times) else total
+        durations.append(max(MIN_FRAME_MS, nxt - t))
+    return times, durations
+
+
+def _render(page, assets, width, height):
+    """Render a page to (bytes, fmt). fmt is 'gif' when it animates, else 'png'."""
+    gif_prepared = {}
+    for i, w in enumerate(page.get("widgets", []) or []):
+        if isinstance(w, dict) and str(w.get("type", "")).lower() == "gif":
+            asset = assets.get(i)
+            if asset:
+                prepared = _prepare_gif(asset, w, width, height)
+                if prepared:
+                    gif_prepared[i] = prepared
+
+    animated = any(len(frames) > 1 for frames, _ in gif_prepared.values())
+    if not animated:
+        canvas = _compose_frame(page, assets, gif_prepared, width, height, 0)
+        out = io.BytesIO()
+        canvas.save(out, format="PNG")
+        return out.getvalue(), "png"
+
+    times, durations = _build_timeline(gif_prepared)
+    frames = [_compose_frame(page, assets, gif_prepared, width, height, t) for t in times]
+    out = io.BytesIO()
+    frames[0].save(
+        out, format="GIF", save_all=True, append_images=frames[1:],
+        duration=durations, loop=0, disposal=2,
+    )
+    return out.getvalue(), "gif"
+
+
+async def render_page(
     hass: HomeAssistant, page: dict, width: int = 32, height: int = 32
-) -> bytes:
-    """Resolve templates, fetch assets and render a page to PNG bytes."""
+) -> tuple[bytes, str]:
+    """Resolve templates, fetch assets and render a page.
+
+    Returns (image_bytes, fmt) where fmt is 'gif' for an animated page (one or
+    more animated GIF widgets) or 'png' for a static page.
+    """
     resolved = _resolve_templates(hass, page or {})
     widgets = resolved.get("widgets", []) or []
     assets = await _prefetch_assets(hass, widgets)
     return await hass.async_add_executor_job(
-        _render_canvas, resolved, assets, width, height
+        _render, resolved, assets, width, height
     )
+
+
+async def render_page_to_png(
+    hass: HomeAssistant, page: dict, width: int = 32, height: int = 32
+) -> bytes:
+    """Backwards-compatible wrapper: render bytes only (PNG for static pages)."""
+    data, _fmt = await render_page(hass, page, width, height)
+    return data

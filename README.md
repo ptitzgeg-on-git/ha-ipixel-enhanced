@@ -11,17 +11,22 @@ Enhanced fork of [ha-ipixel-color](https://github.com/cagcoach/ha-ipixel-color).
 ## What makes it "enhanced"
 
 - **Page designer card** — build pages by dropping widgets (text, sensor,
-  emoji, clock, line, rectangle, progress bar, image) onto a 32×32 canvas.
-  Pick a position from a 9-point anchor grid (top-left, center, bottom-right…)
-  or type exact `x`/`y`. No coding required.
+  emoji, rendered clock, line, rectangle, progress bar, image, **animated GIF**,
+  and the panel's **native clock**) onto a 32×32 canvas. Pick a position from a
+  9-point anchor grid (top-left, center, bottom-right…) or type exact `x`/`y`.
+  No coding required.
 - **Live preview** — the card renders your page server-side and shows it
   pixel-perfect as you edit, like a Zigbee2MQTT-style editor.
 - **Code mode** — power users get the raw page JSON for fine control.
 - **Templates everywhere** — any text field accepts Jinja2, e.g.
   `{{ states('sensor.temperature') }}°`.
 - **Emoji** — any emoji via Twemoji, auto-downloaded and cached.
-- **Page library + playlist** — save named pages and auto-rotate them
-  (weather 10 s → clock 5 s → …), all from the UI.
+- **Animated GIFs** — a `gif` widget composites the page into a multi-frame GIF
+  the panel plays natively.
+- **Named playlists, per panel** — build several playlists (e.g. *Morning*,
+  *Night*) and start one from the card or an automation (`start_playlist`).
+  Each panel runs its **own** playlist independently, and a single playlist can
+  play on **several panels at once** — they never fight over a timer.
 
 Everything is generic: it is **not** tied to any specific use case. You build
 the pages you want.
@@ -47,16 +52,21 @@ open it for the full studio. (You can also add it to any dashboard with
 supported), then use the tabs:
 
 - **🎨 Designer** — build a page from widgets with a live 32×32 preview; bind HA
-  entities with the *＋ HA entity* picker; **Send now**, save to your library, or
-  load a starter example. Visual editor + a Code (JSON) mode.
-- **✏️ Draw** — a clickable 32×32 grid: pick a colour and paint. **Send drawing**
-  pushes the whole picture; **Live draw** lights each pixel on the panel as you
-  click (enables the device's DIY mode). No service calls needed.
-- **🔁 Playlist** — auto-rotate saved pages (also keeps dynamic data refreshed).
-- **💾 Slots** — save pages into the panel's own memory and make it **cycle them
-  by itself** (native animation, works with HA off). Show/delete slots too.
-- **⚙️ Device** — power, brightness, orientation, DIY mode, clock style and the
-  rhythm/visualizer animation, all in one place.
+  entities with the *＋ HA entity* picker; **Send now** or save to your library.
+  Visual editor + a Code (JSON) mode.
+- **✏️ Draw** — a clickable 32×32 grid: pick a colour and brush size, then paint.
+  **Send drawing** pushes the whole picture; **Live draw** lights each pixel on
+  the panel as you click (enables the device's DIY mode). No service calls needed.
+- **🔁 Playlist** — build **named playlists** and Start/Stop them; each page
+  re-renders on its interval so dynamic data stays live. Tick one or more
+  **target panels** to run the same playlist on several displays, or give each
+  panel its own. Saving a running playlist applies the edits live. Launchable
+  from automations with `start_playlist` / `stop_playlist`.
+- **💾 Slots** — push library pages (with a thumbnail preview) into the panel's
+  own memory, recall or edit them, and make the panel **loop several slots by
+  itself** (works with HA off).
+- **⚙️ Device** — power, brightness, orientation, DIY mode and clock style, all
+  in one place.
 
 So `set_pixel`, `set_program`, etc. are driven from the UI — no need to call
 those services by hand. See **[WIDGETS.md](WIDGETS.md)** for the widget
@@ -73,7 +83,10 @@ and height (e.g. 32 × 32).
 
 Add each display as a separate integration entry (they're auto-discovered).
 The designer's device dropdown, the `show_page` service target, and the
-playlist target all let you address a specific panel.
+playlist **target panels** all let you address specific panels — and each
+panel keeps its own running playlist, so two displays can show different
+rotations at the same time. Each panel also gets its own **Playlist** select
+entity, so you can drive it straight from an automation.
 
 ---
 
@@ -89,9 +102,9 @@ playlist target all let you address a specific panel.
 | `ipixel_color.set_orientation` | Rotate the display (0/90/180/270°). Also an **Orientation** select entity. |
 | `ipixel_color.set_fun_mode` | Toggle the panel's built-in effect mode. Also a **Fun Mode** switch. |
 | `ipixel_color.show_slot` / `delete_slot` | Recall / delete a program stored in device memory. |
-| `ipixel_color.set_playlist` | Start/stop the auto-rotating playlist from an automation. |
-| `ipixel_color.set_rhythm_animation` | Self-contained visualizer animation (no audio feed). |
-| `ipixel_color.set_rhythm_levels` | Audio bars from levels you supply (send repeatedly). |
+| `ipixel_color.set_program` | Make the panel loop several stored slots by itself. |
+| `ipixel_color.start_playlist` / `stop_playlist` | Start a **named** playlist (created in the card) on one or more panels (`device_id`, accepts several), or stop it on the chosen panels. |
+| `ipixel_color.set_playlist` | Legacy on/off shim — `enable: false` stops playback; use `start_playlist` to start. |
 
 See **[AUTOMATIONS.md](AUTOMATIONS.md)** for ready-to-use automation examples
 (arrival page, day/night playlist, doorbell alert, GIFs, device slots…).
@@ -138,6 +151,27 @@ Example automation:
 - Bluetooth adapter or an HA Bluetooth proxy
 
 ---
+
+## Development & tests
+
+Most of the integration's logic is pure Python (image/widget rendering, colour
+parsing, BLE frame encoding, playlist sequencing) and is covered by an offline
+test suite that needs neither Home Assistant nor the panel:
+
+```bash
+pip install -r requirements-test.txt
+pytest
+```
+
+The suite stubs the few `homeassistant.*` modules the pure code imports (see
+`tests/conftest.py`) and exercises the real bundled fonts. Rendering is checked
+by asserting on the produced pixels rather than byte-exact image snapshots, so
+the tests stay stable across Pillow versions.
+
+**Not covered (requires hardware):** the BLE transport (`bluetooth/`,
+`api.connect`/send) and the `pypixelcolor` command wrappers. The PNG→BLE path is
+shared with `show_text`/`show_emoji`, so on-device behaviour is validated by
+sending an actual page to the panel.
 
 ## Looking for the ESP32 route?
 

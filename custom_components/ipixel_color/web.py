@@ -13,7 +13,7 @@ from homeassistant.components.http import HomeAssistantView
 from homeassistant.core import HomeAssistant, callback
 
 from .const import DOMAIN
-from .display.widget_renderer import render_page_to_png
+from .display.widget_renderer import render_page
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -40,7 +40,7 @@ class PreviewView(HomeAssistantView):
         scale = max(1, min(16, int(body.get("scale", 1) or 1)))
 
         try:
-            png = await render_page_to_png(hass, page, width, height)
+            data, fmt = await render_page(hass, page, width, height)
         except Exception as err:  # noqa: BLE001
             _LOGGER.warning("Preview render failed: %s", err)
             return self.json_message(f"Render error: {err}", status_code=500)
@@ -48,17 +48,36 @@ class PreviewView(HomeAssistantView):
         if scale > 1:
             from PIL import Image
 
-            def _upscale(data: bytes) -> bytes:
-                img = Image.open(io.BytesIO(data)).convert("RGB")
-                img = img.resize((img.width * scale, img.height * scale), Image.NEAREST)
+            def _upscale(raw: bytes, is_gif: bool) -> bytes:
+                src = Image.open(io.BytesIO(raw))
+                if not is_gif:
+                    img = src.convert("RGB").resize(
+                        (src.width * scale, src.height * scale), Image.NEAREST)
+                    buf = io.BytesIO()
+                    img.save(buf, format="PNG")
+                    return buf.getvalue()
+                # Animated GIF: upscale every frame, keep per-frame durations.
+                frames, durations = [], []
+                try:
+                    n = int(getattr(src, "n_frames", 1) or 1)
+                except Exception:  # noqa: BLE001
+                    n = 1
+                for i in range(n):
+                    src.seek(i)
+                    frames.append(src.convert("RGB").resize(
+                        (src.width * scale, src.height * scale), Image.NEAREST))
+                    durations.append(src.info.get("duration", 100))
                 buf = io.BytesIO()
-                img.save(buf, format="PNG")
+                frames[0].save(buf, format="GIF", save_all=True,
+                               append_images=frames[1:], duration=durations,
+                               loop=0, disposal=2)
                 return buf.getvalue()
 
-            png = await hass.async_add_executor_job(_upscale, png)
+            data = await hass.async_add_executor_job(_upscale, data, fmt == "gif")
 
-        b64 = base64.b64encode(png).decode("ascii")
-        return self.json({"image": f"data:image/png;base64,{b64}", "width": width, "height": height})
+        mime = "image/gif" if fmt == "gif" else "image/png"
+        b64 = base64.b64encode(data).decode("ascii")
+        return self.json({"image": f"data:{mime};base64,{b64}", "width": width, "height": height})
 
 
 # ---------------------------------------------------------------------------
@@ -108,6 +127,7 @@ def ws_list(hass, connection, msg):
             name = device.name_by_user or device.name or entry_id
             devices.append({
                 "id": device.id,
+                "entry_id": entry_id,
                 "name": name,
                 "width": int(info.get("width", 32) or 32),
                 "height": int(info.get("height", 32) or 32),
@@ -116,7 +136,9 @@ def ws_list(hass, connection, msg):
     connection.send_result(
         msg["id"],
         {"pages": store.pages if store else {},
-         "playlist": store.playlist if store else {},
+         "playlists": store.playlists if store else {},
+         "runs": store.runs if store else {},
+         "slots": store.slots if store else {},
          "devices": devices},
     )
 
@@ -150,21 +172,118 @@ async def ws_delete(hass, connection, msg):
     connection.send_result(msg["id"], {"deleted": msg["name"]})
 
 
+def _playlist_state(store):
+    return {"playlists": store.playlists, "runs": store.runs}
+
+
 @websocket_api.websocket_command({
-    vol.Required("type"): "ipixel_color/playlist/set",
-    vol.Required("playlist"): dict,
+    vol.Required("type"): "ipixel_color/playlists/save",
+    vol.Required("name"): str,
+    vol.Required("items"): list,
+    vol.Optional("targets"): vol.Any(None, [str]),
 })
 @websocket_api.async_response
-async def ws_set_playlist(hass, connection, msg):
+async def ws_pl_save(hass, connection, msg):
     store = _store(hass)
     runner = _runner(hass)
     if not store:
         connection.send_error(msg["id"], "not_ready", "Store not initialised")
         return
-    await store.set_playlist(msg["playlist"])
+    await store.save_named_playlist(msg["name"], msg["items"], msg.get("targets"))
+    # Refresh any panel currently playing this playlist so edits take effect.
+    if runner:
+        for entry_id, name in store.runs.items():
+            if name == msg["name"]:
+                runner.restart_one(entry_id)
+    connection.send_result(msg["id"], _playlist_state(store))
+
+
+@websocket_api.websocket_command({
+    vol.Required("type"): "ipixel_color/playlists/delete",
+    vol.Required("name"): str,
+})
+@websocket_api.async_response
+async def ws_pl_delete(hass, connection, msg):
+    store = _store(hass)
+    runner = _runner(hass)
+    if not store:
+        connection.send_error(msg["id"], "not_ready", "Store not initialised")
+        return
+    await store.delete_named_playlist(msg["name"])
     if runner:
         runner.restart()
-    connection.send_result(msg["id"], {"playlist": store.playlist})
+    connection.send_result(msg["id"], _playlist_state(store))
+
+
+@websocket_api.websocket_command({
+    vol.Required("type"): "ipixel_color/playlists/start",
+    vol.Required("name"): str,
+    vol.Optional("targets"): vol.Any(None, [str]),
+})
+@websocket_api.async_response
+async def ws_pl_start(hass, connection, msg):
+    from .pages import device_api_entry_ids, resolve_targets
+
+    store = _store(hass)
+    runner = _runner(hass)
+    if not store:
+        connection.send_error(msg["id"], "not_ready", "Store not initialised")
+        return
+    if msg["name"] not in store.playlists:
+        connection.send_error(msg["id"], "unknown", f"Unknown playlist '{msg['name']}'")
+        return
+    targets = resolve_targets(hass, msg.get("targets"))
+    if not targets:
+        pl = store.playlists.get(msg["name"]) or {}
+        targets = resolve_targets(hass, pl.get("targets")) or device_api_entry_ids(hass)
+    if not await store.start_named_playlist(msg["name"], targets):
+        connection.send_error(msg["id"], "no_device", "No panel available to play on")
+        return
+    if runner:
+        for entry_id in targets:
+            runner.restart_one(entry_id)
+    connection.send_result(msg["id"], _playlist_state(store))
+
+
+@websocket_api.websocket_command({
+    vol.Required("type"): "ipixel_color/playlists/stop",
+    vol.Optional("targets"): vol.Any(None, [str]),
+})
+@websocket_api.async_response
+async def ws_pl_stop(hass, connection, msg):
+    from .pages import resolve_targets
+
+    store = _store(hass)
+    runner = _runner(hass)
+    if not store:
+        connection.send_error(msg["id"], "not_ready", "Store not initialised")
+        return
+    targets = resolve_targets(hass, msg.get("targets"))
+    if targets:
+        for entry_id in targets:
+            await store.stop_playlist(entry_id)
+            if runner:
+                runner.stop(entry_id)
+    else:
+        await store.stop_playlist()
+        if runner:
+            runner.stop()
+    connection.send_result(msg["id"], _playlist_state(store))
+
+
+@websocket_api.websocket_command({
+    vol.Required("type"): "ipixel_color/slots/set",
+    vol.Required("name"): str,
+    vol.Required("slot"): vol.Any(None, vol.All(int, vol.Range(min=1, max=255))),
+})
+@websocket_api.async_response
+async def ws_slot_set(hass, connection, msg):
+    store = _store(hass)
+    if not store:
+        connection.send_error(msg["id"], "not_ready", "Store not initialised")
+        return
+    await store.set_slot(msg["name"], msg["slot"])
+    connection.send_result(msg["id"], {"slots": store.slots})
 
 
 @websocket_api.websocket_command({
@@ -196,6 +315,10 @@ def async_register(hass: HomeAssistant) -> None:
     websocket_api.async_register_command(hass, ws_list)
     websocket_api.async_register_command(hass, ws_save)
     websocket_api.async_register_command(hass, ws_delete)
-    websocket_api.async_register_command(hass, ws_set_playlist)
+    websocket_api.async_register_command(hass, ws_pl_save)
+    websocket_api.async_register_command(hass, ws_pl_delete)
+    websocket_api.async_register_command(hass, ws_pl_start)
+    websocket_api.async_register_command(hass, ws_pl_stop)
+    websocket_api.async_register_command(hass, ws_slot_set)
     websocket_api.async_register_command(hass, ws_draw_grid)
     hass.data[f"{DOMAIN}_web_registered"] = True

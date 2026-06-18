@@ -123,6 +123,32 @@ async def resolve_template_variables(hass: HomeAssistant, text: str) -> str:
         return text
 
 
+async def trigger_auto_update(
+    hass: HomeAssistant, address: str, device_name: str, api, only_modes=None
+) -> None:
+    """Refresh the display after a setting changes, if Auto Update is on.
+
+    Shared by every settings entity (font, mode, colours, clock and text
+    options) so they all decide identically — always via the entity registry
+    (unique_id), never by guessing entity_ids from the device name. When
+    ``only_modes`` is given the refresh only happens if the current Mode is one
+    of those values (e.g. clock options only refresh in clock mode).
+    """
+    try:
+        auto_id = get_entity_id_by_unique_id(hass, address, "auto_update", "switch")
+        auto_state = hass.states.get(auto_id) if auto_id else None
+        if not auto_state or auto_state.state != "on":
+            return
+        if only_modes is not None:
+            mode_id = get_entity_id_by_unique_id(hass, address, "mode_select", "select")
+            mode_state = hass.states.get(mode_id) if mode_id else None
+            if not mode_state or mode_state.state not in only_modes:
+                return
+        await update_ipixel_display(hass, device_name, api)
+    except Exception as err:  # noqa: BLE001 - auto-update is best-effort
+        _LOGGER.debug("Auto-update skipped: %s", err)
+
+
 async def update_ipixel_display(hass: HomeAssistant, device_name: str, api, text: str = None) -> bool:
     """Update iPIXEL display with current settings - can be called from anywhere.
     
@@ -313,7 +339,7 @@ async def _update_text_mode(hass: HomeAssistant, device_name: str, api, text: st
         # Get text color from light entity
         color = get_color_from_light_entity(hass, api._address, "text_color", default="ffffff")
         if color == "000000":
-            # WORKAROUND the dispaly does not show black text.
+            # WORKAROUND: the display does not show pure black text.
             # We weight the channels since not each color appears as bright as the others.
             # In this way we choose the channel which should be less obvious.
             bg = bg_color or "000000"
@@ -403,13 +429,13 @@ async def _get_entity_setting(hass: HomeAssistant, device_name: str, platform: s
         if not state or state.state in ("unknown", "unavailable", ""):
             return _get_default_value(setting, value_type)
         
-        if value_type == bool:
+        if value_type is bool:
             return state.state == "on"
-        elif value_type == float:
+        elif value_type is float:
             value = float(state.state)
             # Return None for 0 font size (auto-sizing)
             return None if setting == "font_size" and value == 0 else value
-        elif value_type == int:
+        elif value_type is int:
             return int(float(state.state))
         else:
             # String value - return the font filename directly
@@ -430,7 +456,7 @@ def _get_default_value(setting: str, value_type):
     }
     default = defaults.get(setting)
     
-    if value_type == bool and default is None:
+    if value_type is bool and default is None:
         return True
     elif value_type in (int, float) and default is None:
         return 0 if setting == "line_spacing" else None

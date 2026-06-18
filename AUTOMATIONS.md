@@ -13,7 +13,9 @@ Everything the card does is also available to automations/scripts through
 | Show an emoji | `ipixel_color.show_emoji` with `emoji:` |
 | Show the native clock | `ipixel_color.show_clock` (style / 24h / date) |
 | Refresh a live page (sensors) | call `show_page` on a `time_pattern` trigger, or use the playlist |
-| Start / stop the auto-rotating playlist | `ipixel_color.set_playlist` `enable: true/false` |
+| Start a named playlist | `ipixel_color.start_playlist` with `name:` (+ optional `device_id:`, one or more panels) |
+| Stop the playlist | `ipixel_color.stop_playlist` (+ optional `device_id:` to stop only some panels) |
+| Pick a playlist per panel | each panel's **Playlist** select entity (`select.<panel>_playlist`) |
 | Show an image or animated GIF | `ipixel_color.show_image` `source:` |
 | Recall something stored on the device | `ipixel_color.show_slot` `slot:` |
 | Rotate the screen | `ipixel_color.set_orientation` or the **Orientation** select |
@@ -24,9 +26,13 @@ Everything the card does is also available to automations/scripts through
 > Changing the *Clock 24h* / *Clock Style* entities alone does **not** refresh
 > the panel — those are just settings read the next time the clock is shown.
 
-A page is saved in the card's **library** and persists across restarts. The
-**playlist** is stored too and keeps running on its own; `set_playlist` just
-turns that rotation on/off from automations.
+A page is saved in the card's **library** and persists across restarts. You can
+build several **named playlists** in the card; `start_playlist: { name: … }`
+starts one (great for day/night scenes), and `stop_playlist` halts it. Each
+panel runs its **own** playlist, so add `device_id:` (it accepts several) to
+target specific displays — without it, the playlist's saved targets are used,
+falling back to every panel. The same playlist can run on multiple panels at
+once. `set_playlist` is a legacy shim that only stops playback.
 
 ## Examples
 
@@ -101,19 +107,33 @@ automation:
 re-renders automatically. For a pure clock, prefer the device's native clock
 mode, which ticks with no Bluetooth traffic.)
 
-### Day / night: playlist by schedule
+### Day / night: a different named playlist per moment
+Build the playlists once in the card (e.g. **Morning**, **Night**), then switch
+between them by name:
 ```yaml
 automation:
-  - alias: Playlist on in the morning
+  - alias: Morning playlist
     trigger: { platform: time, at: "07:00:00" }
     action:
-      - service: ipixel_color.set_playlist
-        data: { enable: true }
-  - alias: Playlist off at night
+      - service: ipixel_color.start_playlist
+        data: { name: "Morning" }
+  - alias: Night playlist
+    trigger: { platform: time, at: "19:00:00" }
+    action:
+      - service: ipixel_color.start_playlist
+        data: { name: "Night" }
+  # Target specific panels (and run the same playlist on several at once):
+  - alias: Night playlist on the two living-room panels
+    trigger: { platform: time, at: "19:00:00" }
+    action:
+      - service: ipixel_color.start_playlist
+        data:
+          name: "Night"
+          device_id: [<panel_a>, <panel_b>]
+  - alias: Off late
     trigger: { platform: time, at: "23:00:00" }
     action:
-      - service: ipixel_color.set_playlist
-        data: { enable: false }
+      - service: ipixel_color.stop_playlist
       - service: switch.turn_off
         target: { entity_id: switch.<your_device> }   # power off the panel
 ```
@@ -178,24 +198,20 @@ and no Bluetooth**:
   data: { slots: [1, 2] }
 ```
 
-### Audio-reactive bars (advanced)
-The panel does **not** analyse audio itself — you feed it 11 levels (0-15),
-typically from an audio-analysis sensor, and call the service repeatedly:
-```yaml
-- service: ipixel_color.set_rhythm_levels
-  target: { device_id: <your_device> }
-  data:
-    style: 2
-    levels: "{{ state_attr('sensor.audio_spectrum','bands') }}"  # list of 11 ints
-```
-For a self-contained visualizer that needs no audio source, use
-`ipixel_color.set_rhythm_animation` instead.
+### A note on the rhythm/visualizer
+The panel has **no microphone** and Home Assistant does not expose a real-time
+audio stream from media players (Spotify, radio…) or the phone, so there's no
+lightweight way to make the bars truly react to sound — the rhythm mode is not
+surfaced in the UI. The protocol-level service `ipixel_color.set_rhythm_levels`
+(feed 11 levels, 0-15) still exists for advanced setups that already produce an
+audio-spectrum sensor.
 
 ## Tips
 
 - Find `<your_device>` in **Settings → Devices & Services → iPIXEL → the device**
   (or use the device picker in the visual service editor).
-- Multiple panels: every service has a device target; the playlist has a target
-  too (`set_playlist` `device_id:`).
+- Multiple panels: every service takes a `device_id` target. Playlists are
+  per-panel — pass `device_id:` (one or several) to `start_playlist`/`stop_playlist`,
+  or use each panel's `select.<panel>_playlist` entity.
 - Long actions: BLE writes take a moment; avoid firing `show_*` many times per
   second (rhythm levels excepted).

@@ -19,38 +19,28 @@ const PALETTE = ["ffffff", "ff0000", "ff8800", "ffcc00", "00cc33", "00ccaa",
 const WIDGET_ICON = {
   text: "mdi:format-text", emoji: "mdi:emoticon-happy-outline", clock: "mdi:clock-outline",
   line: "mdi:vector-line", rect: "mdi:rectangle-outline", progress: "mdi:gauge", image: "mdi:image-outline",
+  gif: "mdi:file-gif-box", native_clock: "mdi:clock-digital", native_text: "mdi:format-text-variant",
 };
 const WIDGET_FIELDS = {
   text:     [["text", "text", "Text / template"], ["font", "font", "Font"], ["size", "number", "Size"]],
+  native_text: [["text", "text", "Text / template"], ["animation", "number", "Animation 0-7"], ["speed", "number", "Speed 0-100"], ["rainbow", "number", "Rainbow 0-9"], ["font", "font", "Font"]],
   emoji:    [["emoji", "text", "Emoji"], ["size", "number", "Size"]],
   clock:    [["format", "text", "strftime"], ["font", "font", "Font"], ["size", "number", "Size"]],
   line:     [["x", "number", "x1"], ["y", "number", "y1"], ["x2", "number", "x2"], ["y2", "number", "y2"], ["width", "number", "Thickness"]],
   rect:     [["width", "number", "W"], ["height", "number", "H"], ["fill", "bool", "Filled"], ["radius", "number", "Radius"]],
   progress: [["value", "text", "Value 0-100 / tmpl"], ["width", "number", "W"], ["height", "number", "H"]],
   image:    [["src", "text", "URL or /local/.."], ["width", "number", "W"], ["height", "number", "H"], ["fit", "fit", "Fit"]],
+  gif:      [["src", "text", "GIF URL or /local/.."], ["width", "number", "W"], ["height", "number", "H"], ["fit", "fit", "Fit"]],
+  native_clock: [["style", "number", "Style 0-8"], ["format_24", "bool", "24-hour"], ["show_date", "bool", "Show date"]],
 };
+// Friendlier labels for the add bar / type picker (defaults to the raw key).
+const WIDGET_LABEL = { native_clock: "clock (native)", native_text: "animated text" };
+const wlabel = (t) => WIDGET_LABEL[t] || t;
 const WIDGET_TYPES = Object.keys(WIDGET_FIELDS);
-const POSITIONLESS = new Set(["line"]);
-
-const EXAMPLES = {
-  "Battery bar": { background: "000000", widgets: [
-    { type: "text", anchor: "top_center", color: "ffffff", font: "Tiny5", size: 8, text: "Battery", dy: 1 },
-    { type: "text", anchor: "center", font: "Tiny5", size: 8, text: "{{ states('sensor.battery') }}%",
-      color: "{{ '00cc33' if states('sensor.battery')|int(0) > 30 else 'ff3333' }}" },
-    { type: "progress", anchor: "bottom_center", width: 30, height: 5, dy: -1, value: "{{ states('sensor.battery') }}",
-      color: "{{ '00cc33' if states('sensor.battery')|int(0) > 30 else 'ff3333' }}" },
-  ] },
-  "Temperature + emoji": { background: "000000", widgets: [
-    { type: "emoji", anchor: "top_left", size: 14, dx: 1, dy: 1, emoji: "🌡️" },
-    { type: "text", anchor: "top_right", color: "ffaa00", font: "Tiny5", size: 8, dx: -1, dy: 2, text: "{{ states('sensor.outdoor_temperature') }}°" },
-    { type: "line", x: 0, y: 17, x2: 31, y2: 17, color: "2d2d2d" },
-    { type: "clock", anchor: "bottom_center", color: "bebebe", font: "Tiny5", size: 8, dy: -1, format: "%H:%M" },
-  ] },
-  "Two sensors": { background: "000000", widgets: [
-    { type: "text", anchor: "top_left", color: "00ccdd", font: "Tiny5", size: 8, dx: 1, dy: 1, text: "{{ states('sensor.living_room_temperature') }}C" },
-    { type: "text", anchor: "bottom_left", color: "88ff00", font: "Tiny5", size: 8, dx: 1, dy: -1, text: "{{ states('sensor.humidity') }}%" },
-  ] },
-};
+const POSITIONLESS = new Set(["line", "native_clock", "native_text"]);
+// These switch the panel to a built-in device mode and take over the whole
+// screen, so a page may hold exactly one of them and nothing else.
+const EXCLUSIVE = new Set(["native_clock", "native_text"]);
 
 function el(tag, attrs = {}, children = []) {
   const n = document.createElement(tag);
@@ -86,7 +76,9 @@ class IPixelCard extends HTMLElement {
     this._tab = "designer";
     this._devices = [];
     this._library = {};
-    this._playlist = { enabled: false, items: [], target: null };
+    this._playlists = {};            // name -> { items:[], targets:[deviceId,...] }
+    this._runs = {};                 // entry_id -> playlist name (what plays where)
+    this._currentPl = null;          // name being edited in the Playlist tab
     this._device = null;
     this._dims = {};                 // deviceId -> {w, h}
     this._gw = GRID;
@@ -95,6 +87,7 @@ class IPixelCard extends HTMLElement {
     this._built = false;
     this._grid = new Array(this._gw * this._gh).fill(null);
     this._brush = "ff0000";
+    this._brushSize = 1;
     this._liveDraw = false;
     this._painting = false;
     this._liveQueue = [];            // throttled set_pixel queue for Live draw
@@ -133,7 +126,9 @@ class IPixelCard extends HTMLElement {
     try {
       const res = await this._hass.connection.sendMessagePromise({ type: "ipixel_color/pages/list" });
       this._library = res.pages || {};
-      this._playlist = res.playlist || this._playlist;
+      this._playlists = res.playlists || {};
+      this._runs = res.runs || {};
+      this._slots = res.slots || {};
       this._devices = res.devices || [];
       this._dims = {};
       for (const d of this._devices) this._dims[d.id] = { w: d.width || GRID, h: d.height || GRID };
@@ -260,23 +255,22 @@ class IPixelCard extends HTMLElement {
     this._img = el("img", { class: "ipx-preview",
       style: `width:${this._gw * PREVIEW_SCALE}px;height:${this._gh * PREVIEW_SCALE}px;` });
     left.appendChild(el("div", { class: "ipx-previewwrap" }, [this._img]));
-    left.appendChild(el("button", { class: "ipx-btn ipx-primary ipx-wide", onclick: () => this._sendNow() },
+    left.appendChild(el("button", { class: "ipx-btn ipx-primary ipx-wide", onclick: (e) => this._sendNow(e) },
       [icon("mdi:send"), "Send now"]));
 
     this._nameInput = el("input", { class: "ipx-input", type: "text", placeholder: "page name" });
+    if (this._pendingName) { this._nameInput.value = this._pendingName; this._pendingName = null; }
     left.appendChild(this._labeled("Save to library", el("div", { class: "ipx-flex" }, [
       this._nameInput,
       el("button", { class: "ipx-btn", onclick: () => this._savePage() }, [icon("mdi:content-save"), "Save"]),
     ])));
     this._librarySel = el("select", { class: "ipx-input ipx-grow", onchange: (e) => this._loadPage(e.target.value) });
-    left.appendChild(this._labeled("Load page", el("div", { class: "ipx-flex" }, [
+    left.appendChild(this._labeled("Load page (into editor)", el("div", { class: "ipx-flex" }, [
       this._librarySel,
       el("button", { class: "ipx-iconbtn ipx-danger", title: "Delete page", onclick: () => this._deletePage() }, icon("mdi:delete")),
     ])));
-    const exampleSel = el("select", { class: "ipx-input ipx-wide", onchange: (e) => this._loadExample(e.target.value) });
-    exampleSel.appendChild(el("option", { value: "" }, "— starter examples —"));
-    Object.keys(EXAMPLES).forEach((n) => exampleSel.appendChild(el("option", { value: n }, n)));
-    left.appendChild(this._labeled("Examples (edit entity names!)", exampleSel));
+    left.appendChild(el("div", { class: "ipx-hint" },
+      "Loading only fills the editor and preview — press Send now to push it to the panel."));
     wrap.appendChild(left);
 
     // right: editor
@@ -337,34 +331,50 @@ class IPixelCard extends HTMLElement {
     wrap.appendChild(this._colorField(this._page, "background", "Background", true));
     (this._page.widgets || []).forEach((w, i) => wrap.appendChild(this._widgetCard(w, i)));
 
+    const widgets = this._page.widgets || [];
+    const hasExclusive = widgets.some((w) => EXCLUSIVE.has(w.type));
+    const hasAny = widgets.length > 0;
+
     const addBar = el("div", { class: "ipx-addbar" });
-    WIDGET_TYPES.forEach((t) => addBar.appendChild(el("button", { class: "ipx-btn ipx-add", title: "Add " + t, onclick: () => {
-      this._page.widgets = this._page.widgets || [];
-      this._page.widgets.push(this._defaultWidget(t));
-      this._renderEditor(); this._schedulePreview();
-    } }, [icon(WIDGET_ICON[t]), t])));
+    WIDGET_TYPES.forEach((t) => {
+      // An exclusive widget takes the whole panel: none can be added alongside
+      // anything else, and once one is present nothing else can be added.
+      const blocked = hasExclusive || (EXCLUSIVE.has(t) && hasAny);
+      const btn = el("button", {
+        class: "ipx-btn ipx-add", title: "Add " + wlabel(t),
+        ...(blocked ? { disabled: "" } : {}),
+        onclick: () => {
+          if (blocked) return;
+          this._page.widgets = this._page.widgets || [];
+          this._page.widgets.push(this._defaultWidget(t));
+          this._renderEditor(); this._schedulePreview();
+        },
+      }, [icon(WIDGET_ICON[t]), wlabel(t)]);
+      addBar.appendChild(btn);
+    });
     wrap.appendChild(this._labeled("Add a widget", addBar));
+    if (hasExclusive) wrap.appendChild(el("div", { class: "ipx-hint" },
+      "This widget takes over the whole panel — remove it to add others."));
     this._editor.appendChild(wrap);
   }
 
   _defaultWidget(type) {
     const w = { type, anchor: "center", color: "ffffff" };
     if (type === "text") { w.text = "Hello"; w.font = "Tiny5"; w.size = 8; }
+    if (type === "native_text") { delete w.anchor; w.text = "Hello"; w.animation = 1; w.speed = 60; w.rainbow = 0; w.font = "Tiny5.ttf"; }
     if (type === "emoji") { w.emoji = "⭐"; w.size = 12; }
     if (type === "clock") { w.format = "%H:%M"; w.font = "Tiny5"; w.size = 8; }
     if (type === "line") { delete w.anchor; w.x = 0; w.y = 16; w.x2 = 31; w.y2 = 16; w.color = "888888"; }
     if (type === "rect") { w.width = 8; w.height = 8; w.fill = true; }
     if (type === "progress") { w.value = "50"; w.width = 30; w.height = 4; w.color = "00cc33"; }
     if (type === "image") { w.src = "/local/"; w.width = 32; w.height = 32; w.fit = "contain"; }
+    if (type === "gif") { w.src = "/local/"; w.width = 32; w.height = 32; w.fit = "contain"; }
+    if (type === "native_clock") { delete w.anchor; delete w.color; w.style = 1; w.format_24 = true; w.show_date = true; }
     return w;
   }
 
   _widgetCard(w, i) {
     const card = el("div", { class: "ipx-wcard" });
-
-    const typeSel = el("select", { class: "ipx-input" });
-    WIDGET_TYPES.forEach((t) => typeSel.appendChild(el("option", { value: t, ...(t === w.type ? { selected: "" } : {}) }, t)));
-    typeSel.addEventListener("change", () => { this._page.widgets[i] = this._defaultWidget(typeSel.value); this._renderEditor(); this._schedulePreview(); });
 
     const ctrls = el("div", { class: "ipx-wctrl" }, [
       el("button", { class: "ipx-iconbtn", title: "Move up", onclick: () => this._move(i, -1) }, icon("mdi:chevron-up")),
@@ -380,14 +390,22 @@ class IPixelCard extends HTMLElement {
     card.appendChild(el("div", { class: "ipx-whead" }, [
       el("span", { class: "ipx-pill" }, String(i + 1)),
       icon(WIDGET_ICON[w.type] || "mdi:shape"),
-      typeSel, ctrls,
+      el("span", { class: "ipx-wtype ipx-grow" }, wlabel(w.type)),
+      ctrls,
     ]));
 
     const fields = el("div", { class: "ipx-fields" });
+    if (w.type === "native_clock") fields.appendChild(el("div", { class: "ipx-hint ipx-wide" },
+      "Takes over the whole panel and ticks by itself (no Bluetooth needed after). " +
+      "Other widgets on the page are ignored when this is sent — there's no live preview."));
+    if (w.type === "native_text") fields.appendChild(el("div", { class: "ipx-hint ipx-wide" },
+      "Scrolls/animates on the panel using its built-in text engine and takes over " +
+      "the whole panel. The preview shows the text statically (the animation only " +
+      "runs on the device). Animation 0-7, speed 0-100, rainbow 0-9."));
     if (!POSITIONLESS.has(w.type)) fields.appendChild(this._positionField(w));
-    if (w.type !== "image") fields.appendChild(this._colorField(w, "color", "Colour"));
+    if (!["image", "gif", "native_clock"].includes(w.type)) fields.appendChild(this._colorField(w, "color", "Colour"));
     for (const [key, kind, label] of (WIDGET_FIELDS[w.type] || [])) fields.appendChild(this._field(w, key, kind, label));
-    const bindKey = w.type === "text" ? "text" : (w.type === "progress" ? "value" : null);
+    const bindKey = (w.type === "text" || w.type === "native_text") ? "text" : (w.type === "progress" ? "value" : null);
     if (bindKey) fields.appendChild(this._entityBind(w, bindKey));
     card.appendChild(fields);
     return card;
@@ -490,7 +508,8 @@ class IPixelCard extends HTMLElement {
     if (!name || !this._library[name]) return;
     this._page = clone(this._library[name]);
     if (this._nameInput) this._nameInput.value = name;
-    this._codeText = null; this._renderEditor(); this._schedulePreview(); this._status(`Loaded “${name}”.`);
+    this._codeText = null; this._renderEditor(); this._schedulePreview();
+    this._status(`Loaded “${name}” into the editor — press Send now to display it on the panel.`);
   }
   async _deletePage() {
     const name = this._librarySel.value; if (!name) return this._status("Pick a page to delete.", true);
@@ -499,21 +518,15 @@ class IPixelCard extends HTMLElement {
       delete this._library[name]; this._refreshLibraryList(); this._status(`Deleted “${name}”.`);
     } catch (e) { this._status("Delete failed: " + e, true); }
   }
-  _loadExample(name) {
-    if (!name || !EXAMPLES[name]) return;
-    this._page = clone(EXAMPLES[name]);
-    this._codeText = null;
-    if (this._mode !== "visual") this._setMode("visual"); else this._renderEditor();
-    this._schedulePreview();
-    this._status(`Loaded example “${name}” — change the entity names to yours.`);
-  }
-  async _sendNow() {
+  async _sendNow(ev) {
     if (!this._device) return this._status("No device selected.", true);
-    this._status("Sending…");
-    try {
-      await this._hass.callService("ipixel_color", "show_page", { page: this._page }, { device_id: this._device });
-      this._status("Sent to display.");
-    } catch (e) { this._status("Send failed: " + e, true); }
+    await this._busy(ev, async () => {
+      this._status("Sending…");
+      try {
+        await this._hass.callService("ipixel_color", "show_page", { page: this._page }, { device_id: this._device });
+        this._status("Sent to display.");
+      } catch (e) { this._status("Send failed: " + e, true); }
+    });
   }
 
   // ============================================================ DRAW
@@ -532,6 +545,11 @@ class IPixelCard extends HTMLElement {
     const custom = el("input", { type: "color", class: "ipx-color", value: "#ff0000", oninput: (e) => { this._brush = e.target.value.replace("#", ""); this._markBrush(pal, null); } });
     tools.appendChild(this._labeled("Custom colour", custom));
 
+    const sizeVal = el("span", { class: "ipx-val" }, String(this._brushSize));
+    const size = el("input", { type: "range", class: "ipx-range", min: 1, max: 8, step: 1, value: this._brushSize });
+    size.addEventListener("input", () => { this._brushSize = Math.max(1, +size.value | 0); sizeVal.textContent = String(this._brushSize); });
+    tools.appendChild(this._labeled("Brush / eraser size", el("div", { class: "ipx-flex ipx-grow" }, [size, sizeVal])));
+
     const live = el("input", { type: "checkbox", class: "ipx-check" });
     live.checked = this._liveDraw;
     live.addEventListener("change", async () => {
@@ -547,7 +565,7 @@ class IPixelCard extends HTMLElement {
       el("button", { class: "ipx-btn", title: "Clear", onclick: () => this._clearGrid() }, [icon("mdi:close-circle-outline"), "Clear"]),
     ]));
     tools.appendChild(el("label", { class: "ipx-lbl ipx-inline" }, [live, el("span", { class: "ipx-lblt" }, "Live draw (paint directly on panel)")]));
-    tools.appendChild(el("button", { class: "ipx-btn ipx-primary ipx-wide", onclick: () => this._sendDrawing() }, [icon("mdi:send"), "Send drawing"]));
+    tools.appendChild(el("button", { class: "ipx-btn ipx-primary ipx-wide", onclick: (e) => this._sendDrawing(e) }, [icon("mdi:send"), "Send drawing"]));
     tools.appendChild(el("div", { class: "ipx-hint" },
       "Click or drag to paint. “Send drawing” pushes the whole picture at once. " +
       "“Live draw” lights each pixel on the panel as you click (enables DIY mode)."));
@@ -580,11 +598,24 @@ class IPixelCard extends HTMLElement {
   _paintCell(cell) {
     if (!cell || !cell.classList || !cell.classList.contains("ipx-cell")) return;
     const i = +cell.getAttribute("data-i");
+    const cx = i % this._gw, cy = Math.floor(i / this._gw);
+    const s = Math.max(1, this._brushSize | 0);
+    const off = Math.floor((s - 1) / 2);          // centre the brush on the cursor
+    for (let dy = 0; dy < s; dy++) {
+      for (let dx = 0; dx < s; dx++) {
+        this._paintXY(cx - off + dx, cy - off + dy);
+      }
+    }
+  }
+
+  _paintXY(x, y) {
+    if (x < 0 || y < 0 || x >= this._gw || y >= this._gh) return;
+    const i = y * this._gw + x;
     if (this._grid[i] === this._brush) return;     // no change, don't re-send
     this._grid[i] = this._brush;                   // null = erase
-    cell.setAttribute("style", this._brush ? `background:#${this._brush};` : "");
+    const cell = this._gridEl && this._gridEl.children[i];
+    if (cell) cell.setAttribute("style", this._brush ? `background:#${this._brush};` : "");
     if (this._liveDraw && this._device && this._brush) {
-      const x = i % this._gw, y = Math.floor(i / this._gw);
       this._liveQueue.push({ x, y, color: this._brush });
       this._flushLive();
     }
@@ -606,17 +637,19 @@ class IPixelCard extends HTMLElement {
     this._liveFlushing = false;
   }
 
-  async _sendDrawing() {
+  async _sendDrawing(ev) {
     if (!this._device) return this._status("No device selected.", true);
-    this._status("Sending…");
-    try {
-      await this._hass.connection.sendMessagePromise({
-        type: "ipixel_color/draw_grid", target: this._device,
-        width: this._gw, height: this._gh, background: "000000",
-        pixels: this._grid.map((c) => c || ""),
-      });
-      this._status("Drawing sent.");
-    } catch (e) { this._status("Send failed: " + e, true); }
+    await this._busy(ev, async () => {
+      this._status("Sending…");
+      try {
+        await this._hass.connection.sendMessagePromise({
+          type: "ipixel_color/draw_grid", target: this._device,
+          width: this._gw, height: this._gh, background: "000000",
+          pixels: this._grid.map((c) => c || ""),
+        });
+        this._status("Drawing sent.");
+      } catch (e) { this._status("Send failed: " + e, true); }
+    });
   }
 
   _clearGrid() {
@@ -628,115 +661,367 @@ class IPixelCard extends HTMLElement {
   // ============================================================ PLAYLIST
   _tabPlaylist() {
     const box = el("div", { class: "ipx-pane" });
-    box.appendChild(this._paneHead("Auto-rotate pages"));
+    box.appendChild(this._paneHead("Playlists", "auto-rotate pages"));
     box.appendChild(el("div", { class: "ipx-hint" },
-      "Each page re-renders on its interval, so dynamic data stays live. " +
-      "For a single live page, add just that one. For a pure clock, use show_clock."));
+      "Build named playlists (e.g. “Morning”, “Night”). Start one from here, or " +
+      "launch it from an automation with the start_playlist service. Each page " +
+      "re-renders on its interval so live data stays fresh."));
 
-    this._plEnabled = el("input", { type: "checkbox", class: "ipx-check" });
-    box.appendChild(el("label", { class: "ipx-lbl ipx-inline" }, [this._plEnabled, el("span", { class: "ipx-lblt" }, "Enabled")]));
-    this._plTarget = el("select", { class: "ipx-input" });
-    box.appendChild(this._labeled("Target device", this._plTarget));
+    // pick a sensible current playlist
+    const plNames = Object.keys(this._playlists).sort();
+    if (this._currentPl == null || !this._playlists[this._currentPl]) {
+      this._currentPl = plNames[0] || null;
+    }
+
+    // playlist selector + management
+    this._plSel = el("select", { class: "ipx-input ipx-grow", onchange: (e) => { this._currentPl = e.target.value; this._refreshPlaylist(); } });
+    box.appendChild(this._labeled("Playlist", el("div", { class: "ipx-flex" }, [
+      this._plSel,
+      el("button", { class: "ipx-btn", title: "New playlist", onclick: () => this._newPlaylist() }, [icon("mdi:plus"), "New"]),
+      el("button", { class: "ipx-btn", title: "Rename", onclick: () => this._renamePlaylist() }, icon("mdi:rename-box")),
+      el("button", { class: "ipx-iconbtn ipx-danger", title: "Delete playlist", onclick: (e) => this._deletePlaylist(e) }, icon("mdi:delete")),
+    ])));
+
+    // Multi-select target panels (a playlist can play on several at once).
+    this._plTargets = el("div", { class: "ipx-vstack" });
+    box.appendChild(this._labeled("Target panels", this._plTargets));
+
     this._plList = el("div", { class: "ipx-vstack" });
     box.appendChild(this._plList);
 
-    const addSel = el("select", { class: "ipx-input ipx-grow" });
-    const names = Object.keys(this._library).sort();
-    if (!names.length) addSel.appendChild(el("option", { value: "" }, "library empty"));
-    names.forEach((n) => addSel.appendChild(el("option", { value: n }, n)));
+    this._plAddSel = el("select", { class: "ipx-input ipx-grow" });
     box.appendChild(this._labeled("Add page", el("div", { class: "ipx-flex" }, [
-      addSel,
+      this._plAddSel,
       el("button", { class: "ipx-btn", onclick: () => {
-        if (!addSel.value) return;
-        this._playlist.items = this._playlist.items || [];
-        this._playlist.items.push({ name: addSel.value, duration: 10 });
+        const pl = this._playlists[this._currentPl];
+        if (!pl) return this._status("Create a playlist first.", true);
+        const name = this._plAddSel.value;
+        if (!name) return;
+        pl.items = pl.items || [];
+        if (pl.items.some((it) => it.name === name)) return this._status(`“${name}” is already in this playlist.`, true);
+        pl.items.push({ name, duration: 10 });
         this._refreshPlaylist();
       } }, [icon("mdi:plus"), "Add"]),
-      el("button", { class: "ipx-btn ipx-primary", onclick: () => this._savePlaylist() }, [icon("mdi:content-save"), "Save playlist"]),
     ])));
+
+    box.appendChild(el("div", { class: "ipx-flex", style: "margin-top:8px;" }, [
+      el("button", { class: "ipx-btn ipx-primary", onclick: (e) => this._savePlaylist(e) }, [icon("mdi:content-save"), "Save"]),
+      el("button", { class: "ipx-btn", onclick: (e) => this._startPlaylist(e) }, [icon("mdi:play"), "Start"]),
+      el("button", { class: "ipx-btn", onclick: (e) => this._stopPlaylist(e) }, [icon("mdi:stop"), "Stop"]),
+    ]));
+
+    this._plAuto = el("div", { class: "ipx-hint ipx-mono" });
+    box.appendChild(this._plAuto);
+
     this._content.appendChild(box);
     this._refreshPlaylist();
   }
 
+  // device.id -> config entry id (runs are keyed by entry_id)
+  _entryForDevice(devId) {
+    const d = this._devices.find((x) => x.id === devId);
+    return d ? d.entry_id : null;
+  }
+
+  // playlist name currently playing on a given device, or null
+  _runningOn(devId) {
+    const e = this._entryForDevice(devId);
+    return e ? (this._runs[e] || null) : null;
+  }
+
+  // is this playlist playing on at least one panel?
+  _isRunning(name) {
+    return Object.values(this._runs).includes(name);
+  }
+
   _refreshPlaylist() {
     if (!this._plList) return;
-    this._plEnabled.checked = !!this._playlist.enabled;
-    this._plTarget.innerHTML = "";
-    this._plTarget.appendChild(el("option", { value: "" }, "first device"));
-    for (const d of this._devices) this._plTarget.appendChild(el("option", { value: d.id, ...(this._playlist.target === d.id ? { selected: "" } : {}) }, d.name));
+    const plNames = Object.keys(this._playlists).sort();
+    this._plSel.innerHTML = "";
+    if (!plNames.length) this._plSel.appendChild(el("option", { value: "" }, "no playlist — create one"));
+    plNames.forEach((n) => this._plSel.appendChild(el("option", { value: n, ...(n === this._currentPl ? { selected: "" } : {}) },
+      n + (this._isRunning(n) ? "  ● running" : ""))));
+    if (this._currentPl) this._plSel.value = this._currentPl;
+
+    const pl = this._playlists[this._currentPl] || null;
+    if (pl && !Array.isArray(pl.targets)) pl.targets = pl.target ? [pl.target] : [];
+    this._plTargets.innerHTML = "";
+    if (!this._devices.length) {
+      this._plTargets.appendChild(el("div", { class: "ipx-hint" }, "no panel connected"));
+    } else {
+      this._devices.forEach((d) => {
+        const checked = pl && pl.targets.includes(d.id);
+        const cb = el("input", { type: "checkbox", ...(checked ? { checked: "" } : {}) });
+        cb.addEventListener("change", () => {
+          if (!pl) return;
+          const set = new Set(pl.targets);
+          if (cb.checked) set.add(d.id); else set.delete(d.id);
+          pl.targets = [...set];
+        });
+        const runs = this._runningOn(d.id);
+        const tag = runs ? el("span", { class: "ipx-pill" }, runs === this._currentPl ? "● running" : `▶ ${runs}`) : null;
+        this._plTargets.appendChild(el("label", { class: "ipx-row" },
+          [cb, el("span", { class: "ipx-grow" }, d.name)].concat(tag ? [tag] : [])));
+      });
+    }
+
     this._plList.innerHTML = "";
-    const items = this._playlist.items || [];
-    if (!items.length) this._plList.appendChild(el("div", { class: "ipx-hint" }, "No pages yet — add some below."));
+    const items = (pl && pl.items) || [];
+    if (!pl) this._plList.appendChild(el("div", { class: "ipx-hint" }, "No playlist selected — create one with “New”."));
+    else if (!items.length) this._plList.appendChild(el("div", { class: "ipx-hint" }, "No pages yet — add some below."));
     items.forEach((it, i) => {
-      const dur = el("input", { class: "ipx-input ipx-num", type: "number", value: it.duration });
+      const dur = el("input", { class: "ipx-input ipx-num", type: "number", min: 2, value: it.duration });
       dur.addEventListener("input", () => { it.duration = Number(dur.value); });
       this._plList.appendChild(el("div", { class: "ipx-row" }, [
         el("span", { class: "ipx-pill" }, String(i + 1)),
+        el("button", { class: "ipx-iconbtn", title: "Up", onclick: () => this._movePl(i, -1) }, icon("mdi:chevron-up")),
+        el("button", { class: "ipx-iconbtn", title: "Down", onclick: () => this._movePl(i, 1) }, icon("mdi:chevron-down")),
         el("span", { class: "ipx-grow" }, it.name),
         this._labeled("seconds", dur),
-        el("button", { class: "ipx-iconbtn ipx-danger", title: "Remove", onclick: () => { this._playlist.items.splice(i, 1); this._refreshPlaylist(); } }, icon("mdi:delete")),
+        el("button", { class: "ipx-iconbtn ipx-danger", title: "Remove", onclick: () => { items.splice(i, 1); this._refreshPlaylist(); } }, icon("mdi:delete")),
       ]));
+    });
+    if (this._plAddSel) {
+      const used = new Set(items.map((it) => it.name));
+      const avail = Object.keys(this._library).sort().filter((n) => !used.has(n));
+      this._plAddSel.innerHTML = "";
+      if (!Object.keys(this._library).length) this._plAddSel.appendChild(el("option", { value: "" }, "library empty"));
+      else if (!avail.length) this._plAddSel.appendChild(el("option", { value: "" }, "all pages already added"));
+      else avail.forEach((n) => this._plAddSel.appendChild(el("option", { value: n }, n)));
+    }
+    if (this._plAuto) {
+      this._plAuto.textContent = this._currentPl
+        ? `Automation:  service: ipixel_color.start_playlist   data: { name: "${this._currentPl}" }`
+        : "";
+    }
+  }
+
+  _movePl(i, dir) {
+    const pl = this._playlists[this._currentPl]; if (!pl) return;
+    const j = i + dir, a = pl.items;
+    if (j < 0 || j >= a.length) return;
+    [a[i], a[j]] = [a[j], a[i]]; this._refreshPlaylist();
+  }
+
+  _newPlaylist() {
+    const name = (window.prompt("New playlist name:") || "").trim();
+    if (!name) return;
+    if (this._playlists[name]) return this._status(`“${name}” already exists.`, true);
+    this._playlists[name] = { items: [], targets: [] };
+    this._currentPl = name;
+    this._refreshPlaylist();
+    this._status(`Created “${name}” — add pages, then Save.`);
+  }
+
+  async _renamePlaylist() {
+    const old = this._currentPl;
+    if (!old || !this._playlists[old]) return this._status("Pick a playlist first.", true);
+    const name = (window.prompt("Rename playlist to:", old) || "").trim();
+    if (!name || name === old) return;
+    if (this._playlists[name]) return this._status(`“${name}” already exists.`, true);
+    const pl = this._playlists[old];
+    try {
+      await this._hass.connection.sendMessagePromise({ type: "ipixel_color/playlists/save", name, items: pl.items || [], targets: pl.targets || [] });
+      const res = await this._hass.connection.sendMessagePromise({ type: "ipixel_color/playlists/delete", name: old });
+      this._playlists = res.playlists || this._playlists; this._runs = res.runs || this._runs;
+      this._currentPl = name;
+      this._refreshPlaylist();
+      this._status(`Renamed to “${name}”.`);
+    } catch (e) { this._status("Rename failed: " + e, true); }
+  }
+
+  async _deletePlaylist(ev) {
+    const name = this._currentPl;
+    if (!name) return this._status("Pick a playlist first.", true);
+    await this._busy(ev, async () => {
+      try {
+        const res = await this._hass.connection.sendMessagePromise({ type: "ipixel_color/playlists/delete", name });
+        this._playlists = res.playlists || {}; this._runs = res.runs || {};
+        this._currentPl = Object.keys(this._playlists)[0] || null;
+        this._refreshPlaylist();
+        this._status(`Deleted “${name}”.`);
+      } catch (e) { this._status("Delete failed: " + e, true); }
     });
   }
 
-  async _savePlaylist() {
-    this._playlist.enabled = this._plEnabled.checked;
-    this._playlist.target = this._plTarget.value || null;
-    try {
-      await this._hass.connection.sendMessagePromise({ type: "ipixel_color/playlist/set", playlist: this._playlist });
-      this._status("Playlist saved.");
-    } catch (e) { this._status("Playlist save failed: " + e, true); }
+  async _savePlaylist(ev) {
+    const name = this._currentPl;
+    const pl = this._playlists[name];
+    if (!pl) return this._status("Create a playlist first.", true);
+    await this._busy(ev, async () => {
+      try {
+        const res = await this._hass.connection.sendMessagePromise({ type: "ipixel_color/playlists/save", name, items: pl.items || [], targets: pl.targets || [] });
+        this._playlists = res.playlists || this._playlists; this._runs = res.runs || this._runs;
+        this._refreshPlaylist();
+        this._status(`Saved “${name}”.`);
+      } catch (e) { this._status("Save failed: " + e, true); }
+    });
+  }
+
+  async _startPlaylist(ev) {
+    const name = this._currentPl;
+    const pl = this._playlists[name];
+    if (!pl) return this._status("Create a playlist first.", true);
+    // Default to the chosen targets, else the panel selected in the toolbar.
+    const targets = (pl.targets && pl.targets.length) ? pl.targets : (this._device ? [this._device] : []);
+    if (!targets.length) return this._status("Pick at least one target panel.", true);
+    await this._busy(ev, async () => {
+      try {
+        // persist current edits first, then start
+        await this._hass.connection.sendMessagePromise({ type: "ipixel_color/playlists/save", name, items: pl.items || [], targets: pl.targets || [] });
+        const res = await this._hass.connection.sendMessagePromise({ type: "ipixel_color/playlists/start", name, targets });
+        this._playlists = res.playlists || this._playlists; this._runs = res.runs || this._runs;
+        this._refreshPlaylist();
+        this._status(`Playing “${name}”.`);
+      } catch (e) { this._status("Start failed: " + e, true); }
+    });
+  }
+
+  async _stopPlaylist(ev) {
+    const pl = this._playlists[this._currentPl];
+    // Stop on the chosen target panels; if none picked, stop everywhere.
+    const targets = (pl && pl.targets && pl.targets.length) ? pl.targets : null;
+    await this._busy(ev, async () => {
+      try {
+        const msg = { type: "ipixel_color/playlists/stop" };
+        if (targets) msg.targets = targets;
+        const res = await this._hass.connection.sendMessagePromise(msg);
+        this._runs = res.runs || {};
+        this._refreshPlaylist();
+        this._status(targets ? "Stopped on selected panels." : "Playlist stopped.");
+      } catch (e) { this._status("Stop failed: " + e, true); }
+    });
   }
 
   // ============================================================ SLOTS
   _tabSlots() {
     const box = el("div", { class: "ipx-pane" });
-    box.appendChild(this._paneHead("Device slots — native animation"));
+    box.appendChild(this._paneHead("Device slots — native playback"));
     box.appendChild(el("div", { class: "ipx-hint" },
-      "Save pages into the panel's own memory, then let it cycle them by itself — " +
-      "no Home Assistant, no Bluetooth needed afterwards."));
+      "Designer pages live in Home Assistant (the “Load page” library). A device " +
+      "slot is a copy stored in the panel's own memory, so it can replay without " +
+      "Home Assistant or Bluetooth. Push a library page into a slot below, then " +
+      "the panel can “Show slot” or auto-cycle slots by itself."));
 
     const names = Object.keys(this._library).sort();
-    if (!names.length) box.appendChild(el("div", { class: "ipx-hint" }, "Save some pages in the Designer first."));
+    if (!names.length) {
+      box.appendChild(el("div", { class: "ipx-hint" }, "Save some pages in the Designer first (Save to library)."));
+    }
+    this._slots = this._slots || {};
     names.forEach((n) => {
-      const slot = el("input", { class: "ipx-input ipx-num", type: "number", min: 1, max: 255, value: 1 });
-      box.appendChild(el("div", { class: "ipx-row" }, [
-        el("span", { class: "ipx-grow" }, n),
+      const page = this._library[n];
+      const assigned = this._slots[n] != null;          // persisted = "in a slot"
+      const shown = assigned ? this._slots[n] : this._suggestSlot(n);  // suggestion if not
+      const dupe = assigned && names.some((m) => m !== n && this._slots[m] === this._slots[n]);
+      const slot = el("input", { class: "ipx-input ipx-num ipx-slotnum" + (dupe ? " ipx-bad" : ""), type: "number", min: 1, max: 255, value: shown });
+      const slotVal = () => Math.max(1, Math.min(255, +slot.value || 1));
+      slot.addEventListener("change", () => {
+        const v = slotVal();
+        if (names.some((m) => m !== n && this._slots[m] === v))
+          this._status(`Slot ${v} is already used by another page — pick a free one.`, true);
+        this._setSlot(n, v); this._renderTab();
+      });
+      box.appendChild(el("div", { class: "ipx-slotrow" }, [
+        this._thumb(page),
+        el("span", { class: "ipx-name ipx-grow" }, n),
+        el("span", { class: "ipx-badge" + (assigned ? " ipx-on" : "") }, assigned ? `in slot ${this._slots[n]}` : "not stored"),
         this._labeled("slot", slot),
-        el("button", { class: "ipx-btn", onclick: () => this._saveToSlot(n, +slot.value) }, [icon("mdi:content-save"), "Save to slot"]),
+        el("button", { class: "ipx-btn", title: "Store this page into the slot on the panel (also shows it now)",
+          onclick: (e) => this._saveToSlot(e, n, slotVal()) }, [icon("mdi:content-save"), "Save to slot"]),
+        el("button", { class: "ipx-btn", title: "Recall this slot from the panel's memory",
+          onclick: (e) => this._svc("show_slot", { slot: slotVal() }, e) }, [icon("mdi:play"), "Show"]),
+        el("button", { class: "ipx-btn", title: "Open this page in the Designer to edit & re-save",
+          onclick: () => this._editInDesigner(n) }, [icon("mdi:pencil"), "Edit"]),
+        el("button", { class: "ipx-iconbtn ipx-danger", title: "Clear this slot on the panel and unassign it (the page stays in your library)",
+          ...(assigned ? {} : { disabled: "" }),
+          onclick: (e) => this._clearSlot(e, n) }, icon("mdi:delete")),
       ]));
     });
 
     box.appendChild(el("hr", { class: "ipx-hr" }));
-    box.appendChild(el("b", {}, "Cycle slots (animation)"));
-    const order = el("input", { class: "ipx-input", type: "text", placeholder: "1,2,3", style: "width:120px;" });
+    box.appendChild(el("b", {}, "Play several slots as an animation"));
+    box.appendChild(el("div", { class: "ipx-hint" },
+      "Make the panel loop through stored slots by itself (no Home Assistant needed). " +
+      "Save pages to those slots above first, then list them here in order."));
+    const order = el("input", { class: "ipx-input", type: "text", placeholder: "e.g. 1,2,3", style: "width:140px;" });
     box.appendChild(el("div", { class: "ipx-flex" }, [
-      this._labeled("order", order),
-      el("button", { class: "ipx-btn ipx-primary", onclick: () => this._startProgram(order.value) }, [icon("mdi:play"), "Start cycling"]),
+      this._labeled("slots", order),
+      el("button", { class: "ipx-btn ipx-primary", onclick: (e) => this._startProgram(e, order.value) }, [icon("mdi:play"), "Loop these slots"]),
     ]));
-
-    const one = el("input", { class: "ipx-input ipx-num", type: "number", min: 0, max: 255, value: 1 });
-    box.appendChild(el("div", { class: "ipx-flex", style: "margin-top:6px;" }, [
-      this._labeled("slot", one),
-      el("button", { class: "ipx-btn", onclick: () => this._svc("show_slot", { slot: +one.value }) }, "Show slot"),
-      el("button", { class: "ipx-iconbtn ipx-danger", title: "Delete slot", onclick: () => this._svc("delete_slot", { slot: +one.value }) }, icon("mdi:delete")),
-    ]));
+    box.appendChild(el("div", { class: "ipx-hint" },
+      "If a “Show” leaves the panel blank, that slot is empty — save a page to it first."));
     this._content.appendChild(box);
   }
 
-  async _saveToSlot(name, slot) {
+  // Small server-rendered preview thumbnail for a saved page.
+  _thumb(page) {
+    const img = el("img", { class: "ipx-thumb" });
+    if (this._hass) {
+      this._hass.callApi("POST", "ipixel_color/preview", { page, width: this._gw, height: this._gh, scale: 3 })
+        .then((res) => { img.src = res.image; })
+        .catch(() => {});
+    }
+    return img;
+  }
+
+  // Load a library page into the Designer for editing, then jump there.
+  _editInDesigner(name) {
+    if (!this._library[name]) return;
+    this._page = clone(this._library[name]);
+    this._pendingName = name;
+    this._codeText = null;
+    this._setTab("designer");
+    this._status(`Editing “${name}” — change it, then Save to update the library or Send now to display.`);
+  }
+
+  // Lowest slot number (1..255) not already assigned to another page.
+  _suggestSlot(name) {
+    const used = new Set(Object.entries(this._slots || {}).filter(([k]) => k !== name).map(([, v]) => v));
+    let n = 1; while (used.has(n) && n < 255) n++;
+    return n;
+  }
+
+  // Persist a page→slot assignment (slot=null clears it), then refresh entities.
+  async _setSlot(name, slot) {
+    this._slots = this._slots || {};
+    if (slot == null) delete this._slots[name]; else this._slots[name] = slot;
+    try {
+      const res = await this._hass.connection.sendMessagePromise({ type: "ipixel_color/slots/set", name, slot: slot ?? null });
+      this._slots = res.slots || this._slots;
+    } catch (e) { this._status("Could not save slot assignment: " + e, true); }
+  }
+
+  async _clearSlot(ev, name) {
+    const slot = this._slots[name];
+    if (slot == null) return;
+    await this._busy(ev, async () => {
+      try {
+        if (this._device) await this._hass.callService("ipixel_color", "delete_slot", { slot }, { device_id: this._device });
+        await this._setSlot(name, null);
+        this._status(`Cleared slot ${slot} on the panel — “${name}” is no longer stored (still in your library).`);
+        this._renderTab();
+      } catch (e) { this._status("Clear slot failed: " + e, true); }
+    });
+  }
+
+  async _saveToSlot(ev, name, slot) {
     const page = this._library[name];
     if (!page) return;
     if (!this._device) return this._status("No device selected.", true);
-    try {
-      await this._hass.callService("ipixel_color", "show_page", { page, save_slot: slot }, { device_id: this._device });
-      this._status(`Saved “${name}” to slot ${slot}.`);
-    } catch (e) { this._status("Save to slot failed: " + e, true); }
+    await this._busy(ev, async () => {
+      this._status(`Saving “${name}” to slot ${slot}…`);
+      try {
+        await this._hass.callService("ipixel_color", "show_page", { page, save_slot: slot }, { device_id: this._device });
+        await this._setSlot(name, slot);
+        this._status(`Saved “${name}” to slot ${slot} (and shown now).`);
+        this._renderTab();
+      } catch (e) { this._status("Save to slot failed: " + e, true); }
+    });
   }
-  _startProgram(text) {
+  _startProgram(ev, text) {
     const slots = (text || "").split(/[,\s]+/).map((x) => parseInt(x, 10)).filter((x) => !isNaN(x));
     if (!slots.length) return this._status("Enter slot numbers like 1,2,3", true);
-    this._svc("set_program", { slots });
+    this._svc("set_program", { slots }, ev);
   }
 
   // ============================================================ DEVICE
@@ -776,16 +1061,6 @@ class IPixelCard extends HTMLElement {
       }
       if (control) box.appendChild(el("div", { class: "ipx-row" }, [el("span", { class: "ipx-grow" }, label), control]));
     });
-
-    box.appendChild(el("hr", { class: "ipx-hr" }));
-    box.appendChild(el("b", {}, "Rhythm / visualizer"));
-    const style = el("input", { class: "ipx-input ipx-num", type: "number", min: 0, max: 1, value: 1 });
-    const frame = el("input", { class: "ipx-input ipx-num", type: "number", min: 0, max: 7, value: 3 });
-    box.appendChild(el("div", { class: "ipx-flex" }, [
-      this._labeled("style", style), this._labeled("frame", frame),
-      el("button", { class: "ipx-btn ipx-primary", onclick: () => this._svc("set_rhythm_animation", { style: +style.value, frame: +frame.value }) }, [icon("mdi:play"), "Play animation"]),
-    ]));
-    box.appendChild(el("div", { class: "ipx-hint" }, "Self-contained visualizer (no audio source needed)."));
     this._content.appendChild(box);
   }
 
@@ -802,10 +1077,21 @@ class IPixelCard extends HTMLElement {
   }
 
   // ---------- helpers ----------
-  async _svc(service, data) {
+  // Disable the clicked button (and any extra buttons) for the duration of an
+  // async action so a slow BLE upload can't be fired twice.
+  async _busy(ev, fn, also) {
+    const btns = [ev && ev.currentTarget, ...(also || [])].filter(Boolean);
+    btns.forEach((b) => { b.disabled = true; b.classList.add("ipx-busy"); });
+    try { return await fn(); }
+    finally { btns.forEach((b) => { b.disabled = false; b.classList.remove("ipx-busy"); }); }
+  }
+
+  async _svc(service, data, ev) {
     if (!this._device) return this._status("No device selected.", true);
-    try { await this._hass.callService("ipixel_color", service, data, { device_id: this._device }); this._status(`${service} sent.`); }
-    catch (e) { this._status(`${service} failed: ` + e, true); }
+    await this._busy(ev, async () => {
+      try { await this._hass.callService("ipixel_color", service, data, { device_id: this._device }); this._status(`${service} sent.`); }
+      catch (e) { this._status(`${service} failed: ` + e, true); }
+    });
   }
 
   _styles() {
@@ -851,10 +1137,21 @@ class IPixelCard extends HTMLElement {
         color:var(--primary-text-color);font:inherit;transition:transform .05s,box-shadow .15s,background .15s;}
       .ipx-btn:hover{box-shadow:0 2px 6px rgba(0,0,0,.12);}
       .ipx-btn:active{transform:translateY(1px);}
+      .ipx-btn:disabled,.ipx-iconbtn:disabled{opacity:.45;cursor:not-allowed;box-shadow:none;transform:none;pointer-events:none;}
+      .ipx-busy{position:relative;}
+      .ipx-busy::after{content:"";position:absolute;inset:0;margin:auto;width:14px;height:14px;border-radius:50%;
+        border:2px solid currentColor;border-right-color:transparent;animation:ipx-spin .7s linear infinite;}
+      @keyframes ipx-spin{to{transform:rotate(360deg);}}
       .ipx-primary{background:var(--primary-color);color:var(--text-primary-color,#fff);border-color:transparent;}
       .ipx-danger:hover{color:var(--error-color);}
       .ipx-wide{width:100%;justify-content:center;}
       .ipx-add{text-transform:capitalize;}
+      .ipx-btn[disabled]{opacity:.38;cursor:not-allowed;pointer-events:none;}
+      .ipx-iconbtn[disabled]{opacity:.3;cursor:not-allowed;pointer-events:none;}
+      .ipx-wtype{font-weight:600;text-transform:capitalize;}
+      .ipx-badge{font-size:.8em;padding:2px 8px;border-radius:10px;border:1px solid var(--divider-color);opacity:.8;white-space:nowrap;}
+      .ipx-badge.ipx-on{border-color:var(--success-color,#3a3);color:var(--success-color,#3a3);opacity:1;}
+      .ipx-input.ipx-bad{border-color:var(--error-color,#c33);}
       .ipx-iconbtn{display:inline-flex;align-items:center;justify-content:center;width:34px;height:34px;flex:none;
         border:1px solid var(--divider-color);border-radius:var(--ipx-radius-sm);cursor:pointer;
         background:var(--card-background-color);color:var(--primary-text-color);transition:background .15s,color .15s;}
@@ -885,6 +1182,12 @@ class IPixelCard extends HTMLElement {
           linear-gradient(-45deg,transparent 75%,#2b2b2b 75%);
         background-size:16px 16px;background-position:0 0,0 8px,8px -8px,-8px 0;background-color:#1b1b1b;}
       .ipx-preview{image-rendering:pixelated;border-radius:4px;box-shadow:0 2px 10px rgba(0,0,0,.4);}
+      .ipx-thumb{image-rendering:pixelated;border-radius:4px;background:#000;width:48px;height:48px;flex:none;
+        object-fit:contain;border:1px solid var(--divider-color);}
+      .ipx-slotrow{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:8px;border-radius:var(--ipx-radius-sm);
+        border:1px solid var(--divider-color);}
+      .ipx-slotrow .ipx-name{font-weight:600;min-width:90px;}
+      .ipx-slotnum{width:64px;}
 
       .ipx-status{min-height:20px;font-size:12.5px;color:var(--secondary-text-color);padding-left:2px;}
       .ipx-status.ok{color:var(--success-color,#3c3);}

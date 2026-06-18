@@ -30,13 +30,13 @@ show_text:
         text:
     animation:
       name: Animation
-      description: 0=fixed, 1=scroll left, 2=scroll right, 3=scroll up, 4=scroll down, 5=blink, 6=breeze, 7=snow, 8=laser (0-10).
+      description: 0=fixed, 1=scroll left, 2=scroll right, 3=scroll up, 4=scroll down, 5=blink, 6=breeze, 7=snow (0-7; 3 & 4 are ignored on non-32x32 panels).
       required: false
       default: 1
       selector:
         number:
           min: 0
-          max: 10
+          max: 7
           mode: box
     speed:
       name: Speed
@@ -50,13 +50,13 @@ show_text:
           mode: slider
     rainbow:
       name: Rainbow
-      description: Rainbow colour cycling mode (0=off, 1-3 styles).
+      description: Rainbow colour cycling mode (0=off, 1-9 styles).
       required: false
       default: 0
       selector:
         number:
           min: 0
-          max: 3
+          max: 9
           mode: box
 
 show_emoji:
@@ -288,8 +288,10 @@ set_rhythm_levels:
         object:
 
 set_playlist:
-  name: Enable/disable playlist
-  description: Start or stop the auto-rotating page playlist (configured in the iPIXEL card).
+  name: Stop playlist (legacy)
+  description: >-
+    Stop the auto-rotating playlist. Kept for backwards compatibility — to start
+    a playlist use start_playlist with a name. Only enable=false does anything.
   fields:
     enable:
       name: Enable
@@ -297,12 +299,50 @@ set_playlist:
       selector:
         boolean:
     device_id:
-      name: Target device
-      description: Optional — which display the playlist should play on.
+      name: Target panels
+      description: Optional — which panels to stop (defaults to all).
       required: false
       selector:
         device:
           integration: ipixel_color
+          multiple: true
+
+start_playlist:
+  name: Start a named playlist
+  description: >-
+    Start one of the named playlists created in the iPIXEL card. Each chosen
+    panel auto-rotates that playlist's pages independently until you stop it or
+    start another on that panel.
+  fields:
+    name:
+      name: Playlist name
+      description: The playlist name as saved in the iPIXEL card.
+      required: true
+      selector:
+        text:
+    device_id:
+      name: Target panels
+      description: >-
+        Optional — which panels to play it on. You can pick several. Defaults to
+        the playlist's saved targets, or all panels if none were saved.
+      required: false
+      selector:
+        device:
+          integration: ipixel_color
+          multiple: true
+
+stop_playlist:
+  name: Stop the playlist
+  description: Stop the running playlist on the given panels (or all panels).
+  fields:
+    device_id:
+      name: Target panels
+      description: Optional — which panels to stop (defaults to all).
+      required: false
+      selector:
+        device:
+          integration: ipixel_color
+          multiple: true
 
 set_program:
   name: Native animation (cycle slots)

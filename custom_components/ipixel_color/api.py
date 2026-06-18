@@ -16,7 +16,7 @@ from .device.image import make_image_command
 from .device.info import build_device_info_command, parse_device_response
 from .display.text_renderer import render_text_to_png
 from .display.emoji_renderer import render_emoji_to_png
-from .display.widget_renderer import render_page_to_png
+from .display.widget_renderer import render_page
 from .const import OPT_OVERRIDE_DIMENSIONS, OPT_PANEL_WIDTH, OPT_PANEL_HEIGHT
 from .exceptions import iPIXELError, iPIXELConnectionError, iPIXELTimeoutError
 
@@ -206,7 +206,7 @@ class iPIXELAPI:
             return False
 
     async def _send_image_commands(self, commands: list[bytes], label: str) -> bool:
-        """Envoie une liste de commandes image sans reconnexion."""
+        """Send a list of image command windows over BLE, connecting first if needed."""
         total_bytes = sum(len(c) for c in commands)
         _LOGGER.info(
             "Image transfer [%s]: %d window(s), %d bytes total",
@@ -238,17 +238,57 @@ class iPIXELAPI:
         save_slot >= 1 also stores the page in the device's memory so it can be
         recalled later with show_slot() without Home Assistant.
         """
+        # A native_clock / native_text widget switches the panel to a built-in
+        # device mode (clock face, or its scrolling text engine) — an exclusive
+        # mode, not a rendered image. It runs on the panel by itself, so any
+        # other widgets on the page are ignored (the Studio forbids mixing).
+        for w in (page.get("widgets") or []):
+            if not isinstance(w, dict):
+                continue
+            wtype = str(w.get("type", "")).lower()
+            if wtype == "native_clock":
+                return await self.set_clock_mode(
+                    style=int(w.get("style", 1) or 0),
+                    show_date=bool(w.get("show_date", True)),
+                    format_24=bool(w.get("format_24", True)),
+                )
+            if wtype == "native_text":
+                from .display.widget_renderer import parse_color
+                from .common import rgb_to_hex, resolve_template_variables
+                text = await resolve_template_variables(self._hass, str(w.get("text", "")))
+                text = text.replace("\\n", "\n").replace("\\t", "\t")
+                color = rgb_to_hex(*parse_color(w.get("color", "ffffff"), (255, 255, 255)))
+                bg = w.get("bg") or w.get("background")
+                bg_color = rgb_to_hex(*parse_color(bg, (0, 0, 0))) if bg else None
+                # A .ttf/.otf selection (from the same font dropdown as other
+                # widgets) is resolved to a real path; a bare name (e.g. CUSONG)
+                # is passed through to pypixelcolor's built-in fonts.
+                font_sel = w.get("font") or "CUSONG"
+                if font_sel.lower().endswith((".ttf", ".otf")):
+                    from .fonts import get_font_path
+                    fp = get_font_path(font_sel)
+                    font_sel = str(fp) if fp else "CUSONG"
+                return await self.display_text_pypixelcolor(
+                    text=text,
+                    color=color,
+                    bg_color=bg_color,
+                    font=font_sel,
+                    animation=int(w.get("animation", 1) or 0),
+                    speed=int(w.get("speed", 60) or 0),
+                    rainbow_mode=int(w.get("rainbow", 0) or 0),
+                )
         try:
             device_info = await self.get_device_info()
-            png_data = await render_page_to_png(
+            data, fmt = await render_page(
                 self._hass, page, device_info["width"], device_info["height"]
             )
+            ext = ".gif" if fmt == "gif" else ".png"
             commands = make_image_command(
-                image_bytes=png_data, file_extension=".png",
+                image_bytes=data, file_extension=ext,
                 resize_method="crop", device_info_dict=device_info,
                 save_slot=save_slot,
             )
-            return await self._send_image_commands(commands, f"page(slot={save_slot})")
+            return await self._send_image_commands(commands, f"page{ext}(slot={save_slot})")
         except Exception as err:  # noqa: BLE001
             _LOGGER.exception("Error displaying widget page: %s", err)
             return False

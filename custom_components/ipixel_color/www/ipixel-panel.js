@@ -29,16 +29,29 @@ class IPixelPanel extends HTMLElement {
   }
   _mount(hass) {
     if (!this._card) {
-      const wrap = document.createElement("div");
-      wrap.style.cssText = "max-width:920px;margin:0 auto;padding:16px;";
+      // Full-height surface that adopts the active HA theme, with the designer
+      // centred and a comfortable max width on desktop.
+      this.style.cssText =
+        "display:block;min-height:100%;box-sizing:border-box;" +
+        "background:var(--primary-background-color);color:var(--primary-text-color);";
+      this._wrap = document.createElement("div");
       this._card = document.createElement("ipixel-card");
       if (typeof this._card.setConfig === "function") this._card.setConfig({});
-      wrap.appendChild(this._card);
-      this.appendChild(wrap);
+      this._wrap.appendChild(this._card);
+      this.appendChild(this._wrap);
+      this._applyLayout();
     }
     this._card.hass = hass;
   }
-  set narrow(v) { this._narrow = v; }
+  // Tighten padding and drop the max width when HA reports a narrow viewport
+  // (mobile / collapsed sidebar) so the grid uses the full screen.
+  _applyLayout() {
+    if (!this._wrap) return;
+    const pad = this._narrow ? "8px" : "16px";
+    const maxw = this._narrow ? "100%" : "960px";
+    this._wrap.style.cssText = `max-width:${maxw};margin:0 auto;padding:${pad};`;
+  }
+  set narrow(v) { this._narrow = v; this._applyLayout(); }
   set route(v) { this._route = v; }
   set panel(v) { this._panel = v; }
 }

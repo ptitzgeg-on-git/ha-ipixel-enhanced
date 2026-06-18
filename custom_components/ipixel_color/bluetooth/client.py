@@ -100,6 +100,21 @@ class BluetoothClient:
             _LOGGER.error("Unexpected error connecting to %s: %s", self._address, err)
             raise iPIXELConnectionError(f"Connection failed: {err}") from err
 
+    async def _reconnect_if_needed(self) -> bool:
+        """Re-establish the link if the panel dropped it (it disconnects when
+        idle). Reuses the notification handler from the first connect, so every
+        command path recovers transparently instead of failing silently."""
+        if self.is_connected:
+            return True
+        if self._notification_handler is None:
+            return False
+        _LOGGER.debug("Link down — reconnecting to %s before sending", self._address)
+        try:
+            return await self.connect(self._notification_handler)
+        except iPIXELConnectionError as err:
+            _LOGGER.error("Reconnect to %s failed: %s", self._address, err)
+            return False
+
     async def disconnect(self) -> None:
         if self._client and self._connected:
             try:
@@ -119,7 +134,7 @@ class BluetoothClient:
         - Grandes commandes (images >200 octets) : Write Without Response, streaming
           Si le device ne supporte pas WwoR → fallback Write With Response
         """
-        if not self._connected or not self._client:
+        if not await self._reconnect_if_needed():
             _LOGGER.error("Device not connected")
             return False
 
