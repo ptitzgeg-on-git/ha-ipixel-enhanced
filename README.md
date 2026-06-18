@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="assets/logo.png" alt="iPIXEL Enhanced" width="160">
+<img src="https://raw.githubusercontent.com/ptitzgeg-on-git/ha-ipixel-enhanced/main/assets/logo.png" alt="iPIXEL Enhanced" width="160">
 
 # iPIXEL Enhanced for Home Assistant
 
@@ -9,7 +9,7 @@
 and a live 32×32 preview right inside the dashboard.**
 
 [![Release](https://img.shields.io/github/v/release/ptitzgeg-on-git/ha-ipixel-enhanced?label=release)](https://github.com/ptitzgeg-on-git/ha-ipixel-enhanced/releases)
-[![License: GPL-3.0](https://img.shields.io/github/license/ptitzgeg-on-git/ha-ipixel-enhanced)](LICENSE)
+[![License: GPL-3.0](https://img.shields.io/github/license/ptitzgeg-on-git/ha-ipixel-enhanced)](https://github.com/ptitzgeg-on-git/ha-ipixel-enhanced/blob/main/LICENSE)
 [![HACS: Custom](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://hacs.xyz/)
 [![Home Assistant](https://img.shields.io/badge/Home%20Assistant-2024.7%2B-blue.svg)](https://www.home-assistant.io/)
 
@@ -228,7 +228,7 @@ If you build on this project, please keep these credits.
 ## License
 
 This integration is **free software** under the **[GNU General Public License
-v3.0](LICENSE)**, because it is a derivative work of
+v3.0](https://github.com/ptitzgeg-on-git/ha-ipixel-enhanced/blob/main/LICENSE)**, because it is a derivative work of
 [ha-ipixel-color](https://github.com/cagcoach/ha-ipixel-color) (GPL-3.0).
 
 ```

@@ -3,6 +3,12 @@
 All notable changes to **iPIXEL Enhanced** are documented here.
 This project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.7.2] — 2026-06-18
+
+### Fixed
+- README header now renders in HACS: the logo and the badge/links use absolute
+  URLs (relative paths were blanked or mangled by the HACS markdown renderer).
+
 ## [0.7.1] — 2026-06-18
 
 ### Added
@@ -45,6 +51,7 @@ This project adheres to [Semantic Versioning](https://semver.org/).
 - Visual page designer with live 32×32 preview, sidebar panel, native clock and
   entity cleanup.
 
+[0.7.2]: https://github.com/ptitzgeg-on-git/ha-ipixel-enhanced/releases/tag/v0.7.2
 [0.7.1]: https://github.com/ptitzgeg-on-git/ha-ipixel-enhanced/releases/tag/v0.7.1
 [0.7.0]: https://github.com/ptitzgeg-on-git/ha-ipixel-enhanced/releases/tag/v0.7.0
 [0.3.0]: https://github.com/ptitzgeg-on-git/ha-ipixel-enhanced/releases/tag/0.3.0
