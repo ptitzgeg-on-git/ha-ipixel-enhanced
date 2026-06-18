@@ -1,10 +1,34 @@
+<div align="center">
+
+<img src="assets/logo.png" alt="iPIXEL Enhanced" width="160">
+
 # iPIXEL Enhanced for Home Assistant
 
-A feature-rich Home Assistant integration for **iPIXEL Color** LED matrix
-displays (32×32 and similar) over Bluetooth — with a **visual page designer**,
-**emoji support**, and a **live 32×32 preview** right inside the dashboard.
+**A feature-rich Home Assistant integration for iPIXEL Color LED matrix displays
+(32×32 and similar) over Bluetooth — with a visual page designer, emoji support,
+and a live 32×32 preview right inside the dashboard.**
 
-Enhanced fork of [ha-ipixel-color](https://github.com/cagcoach/ha-ipixel-color).
+[![Release](https://img.shields.io/github/v/release/ptitzgeg-on-git/ha-ipixel-enhanced?label=release)](https://github.com/ptitzgeg-on-git/ha-ipixel-enhanced/releases)
+[![License: GPL-3.0](https://img.shields.io/github/license/ptitzgeg-on-git/ha-ipixel-enhanced)](LICENSE)
+[![HACS: Custom](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://hacs.xyz/)
+[![Home Assistant](https://img.shields.io/badge/Home%20Assistant-2024.7%2B-blue.svg)](https://www.home-assistant.io/)
+
+Enhanced fork of [cagcoach/ha-ipixel-color](https://github.com/cagcoach/ha-ipixel-color) (GPL-3.0).
+
+</div>
+
+## The hardware
+
+This drives the cheap **32×32 RGB pixel panels** sold under names like
+**B.K. Light** (e.g. at **Action**) and other *iPIXEL Color* / `LED_BLE_*`
+Bluetooth matrices:
+
+<p>
+  <img src="https://asset.action.com/image/upload/t_digital_product_image/w_1080/3217439_4057722024636-111_01_ifrfoq.webp" alt="iPIXEL Color pixel panel — front" width="320">
+  <img src="https://asset.action.com/image/upload/t_digital_product_image/w_1080/3217439_4057722024636-110_02_caxubb.webp" alt="iPIXEL Color pixel panel — packaging" width="320">
+</p>
+
+> Product photos © Action — shown for identification only.
 
 ---
 
@@ -30,6 +54,9 @@ Enhanced fork of [ha-ipixel-color](https://github.com/cagcoach/ha-ipixel-color).
 
 Everything is generic: it is **not** tied to any specific use case. You build
 the pages you want.
+
+> **🆕 New in 0.7.0:** playlists are now **per panel** and can target **several
+> panels at once**. See the full [CHANGELOG](CHANGELOG.md).
 
 ---
 
@@ -181,8 +208,48 @@ This project is the **direct Home Assistant** integration — no extra hardware.
 
 ---
 
-## Credits
+## Credits & acknowledgements
 
-- Original integration: [@cagcoach](https://github.com/cagcoach/ha-ipixel-color)
-- ESPHome component: [@DonKracho](https://github.com/DonKracho/ESPHome-component-iPixel-ble)
-- Emoji artwork: [Twemoji](https://github.com/twitter/twemoji)
+This project stands on the shoulders of others — huge thanks to:
+
+- **[@cagcoach](https://github.com/cagcoach/ha-ipixel-color)** — the original
+  `ha-ipixel-color` integration this is forked from. The Bluetooth integration
+  foundation and much of the device handling come from his work.
+- **[@DonKracho](https://github.com/DonKracho/ESPHome-component-iPixel-ble)** —
+  his ESPHome iPixel BLE component was an invaluable reference for understanding
+  the panel's protocol. No code was copied; the protocol insights helped
+  validate ours (see [PROTOCOL.md](PROTOCOL.md)).
+- **[Twemoji](https://github.com/twitter/twemoji)** — the color emoji artwork.
+
+If you build on this project, please keep these credits.
+
+---
+
+## License
+
+This integration is **free software** under the **[GNU General Public License
+v3.0](LICENSE)**, because it is a derivative work of
+[ha-ipixel-color](https://github.com/cagcoach/ha-ipixel-color) (GPL-3.0).
+
+```
+Copyright (C) 2024-2026  dwayne (@ptitzgeg-on-git)
+Based on ha-ipixel-color, Copyright (C) cagcoach
+
+This program is free software: you can redistribute it and/or modify it under
+the terms of the GNU General Public License as published by the Free Software
+Foundation, either version 3 of the License, or (at your option) any later
+version. It is distributed WITHOUT ANY WARRANTY. See the LICENSE file for the
+full text.
+```
+
+**What the GPL means for you and for this project:**
+
+- ✅ You may use it (including commercially), study it, share it, and modify it.
+- 🔒 **Copyleft / share-alike:** if you distribute a modified version, you
+  **must** release your changes under the GPL-3.0 too, with source — nobody can
+  turn this work into a closed/proprietary product.
+- 🙏 You must keep the copyright and credit notices above.
+
+> The GPL **cannot** forbid commercial use or modification — that is by design,
+> and it is the licence inherited from the upstream project. What it *does*
+> guarantee is that improvements stay open and you stay credited.
