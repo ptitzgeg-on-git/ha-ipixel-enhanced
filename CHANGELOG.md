@@ -3,6 +3,15 @@
 All notable changes to **iPIXEL Enhanced** are documented here.
 This project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.7.1] — 2026-06-18
+
+### Added
+- **Brand icon** bundled under `brand/` (Brands Proxy API), so the integration
+  shows its logo in HACS and the Home Assistant integrations UI.
+- **GPL-3.0 `LICENSE`** (this is a derivative of `ha-ipixel-color`, GPL-3.0),
+  with copyright attribution, plus an expanded credits section and the project
+  logo / product photos in the README.
+
 ## [0.7.0] — 2026-06-18
 
 ### Added
@@ -36,5 +45,6 @@ This project adheres to [Semantic Versioning](https://semver.org/).
 - Visual page designer with live 32×32 preview, sidebar panel, native clock and
   entity cleanup.
 
+[0.7.1]: https://github.com/ptitzgeg-on-git/ha-ipixel-enhanced/releases/tag/v0.7.1
 [0.7.0]: https://github.com/ptitzgeg-on-git/ha-ipixel-enhanced/releases/tag/v0.7.0
 [0.3.0]: https://github.com/ptitzgeg-on-git/ha-ipixel-enhanced/releases/tag/0.3.0
